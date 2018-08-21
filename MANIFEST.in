@@ -1,0 +1,2 @@
+include gasp/osm2lulc/osmtolulc.sqlite
+include gasp/fmapi/apis.db3

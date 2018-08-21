@@ -1,0 +1,13 @@
+# gasp distribution
+dist/*
+build/*
+!dist/requirements.txt
+gasp.egg-info
+# .pyc files
+*.pyc
+# eclipse projects
+.project
+.pydevproject
+.settings
+# Hide notebooks checkpoints
+.ipynb*
