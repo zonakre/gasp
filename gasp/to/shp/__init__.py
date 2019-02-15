@@ -145,13 +145,13 @@ def psql_to_shp(conParam, table, outshp, api='pandas',
         from gasp import exec_cmd
         
         cmd = (
-            'pgsql2shp -f {out} -h {hst} -u {usr} -p {pt} -P {pas} -g {geom} '
+            'pgsql2shp -f {out} -h {hst} -u {usr} -p {pt} -P {pas}{geom} '
             '{bd} {t}'
         ).format(
             hst=conParam['HOST'], usr=conParam['USER'], pt=conParam['PORT'],
             pas=conParam['PASSWORD'], bd=conParam['DATABASE'],
             t=table if not tableIsQuery else '"{}"'.format(table),
-            out=outshp, geom=geom_col
+            out=outshp, geom="" if not geom_col else " -g {}".format(geom_col)
         )
         
         outcmd = exec_cmd(cmd)

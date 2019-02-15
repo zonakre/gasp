@@ -5,7 +5,96 @@ from __future__ import unicode_literals
 Data analysis By Overlay Tools
 """
 
-def check_shape_diff(SHAPES_TO_COMPARE, OUT_FOLDER, REPORT, conPARAM, DB, SRS_CODE):
+def clip(inFeat, clipFeat, outFeat, api_gis="grass"):
+    """
+    Clip Analysis
+    
+    api_gis Options:
+    * grass
+    * grass_cmd
+    """
+    
+    if api_gis == "grass":
+        from grass.pygrass.modules import Module
+        
+        vclip = Module(
+            "v.clip", input=inFeat, clip=clipFeat,
+            output=outFeat, overwrite=True, run_=False
+        )
+        
+        vclip()
+    
+    elif api_gis == "grass_cmd":
+        from gasp import exec_cmd
+        
+        rcmd = exec_cmd(
+            "v.clip input={} clip={} output={} --overwrite".format(
+                inFeat, clipFeat, outFeat
+            )
+        )
+    
+    else:
+        raise ValueError("{} is not available!".format(api_gis))
+    
+    return outFeat
+
+
+def union(lyrA, lyrB, outShp, api_gis="arcpy"):
+    """
+    Calculates the geometric union of the overlayed polygon layers, i.e.
+    the intersection plus the symmetrical difference of layers A and B.
+    
+    API's Available:
+    * arcpy;
+    * saga;
+    * grass_cmd;
+    * grass_cmd;
+    """
+    
+    if api_gis == "arcpy":
+        import arcpy
+        
+        if type(lyrB) == list:
+            lst = [lyrA] + lyrB
+        else:
+            lst = [lyrA, lyrB]
+        
+        arcpy.Union_analysis(";".join(lst), outShp, "ALL", "", "GAPS")
+    
+    elif api_gis == "saga":
+        from gasp import exec_cmd
+        
+        rcmd = exec_cmd((
+            "saga_cmd shapes_polygons 17 -A {} -B {} -RESULT {} -SPLIT 1"
+        ).format(lyrA, lyrB, outShp))
+    
+    elif api_gis == "grass":
+        from grass.pygrass.modules import Module
+        
+        un = Module(
+            "v.overlay", ainput=lyrA, atype="area",
+            binput=lyrB, btype="area", operator="or",
+            output=outShp, overwrite=True, run_=False, quiet=True
+        )
+        
+        un()
+    
+    elif api_gis == "grass_cmd":
+        from gasp import exec_cmd
+        
+        outcmd = exec_cmd((
+            "v.overlay ainput={} atype=area binput={} btype=area "
+            "operator=or output={} --overwrite --quiet"
+        ).format(lyrA, lyrB, outShp))
+    
+    else:
+        raise ValueError("{} is not available!".format(api_gis))
+    
+    return outShp
+
+
+def check_shape_diff(SHAPES_TO_COMPARE, OUT_FOLDER, REPORT, conPARAM, DB, SRS_CODE,
+                     GIS_SOFTWARE="GRASS", RST_GRASS_TEMPLATE=None):
     """
     Script to check differences between pairs of Feature Classes
     
@@ -17,70 +106,150 @@ def check_shape_diff(SHAPES_TO_COMPARE, OUT_FOLDER, REPORT, conPARAM, DB, SRS_CO
     
     * Dependências:
     - ArcGIS;
+    - GRASS;
     - PostgreSQL;
     - PostGIS.
+    
+    * GIS_SOFTWARE Options:
+    - ARCGIS;
+    - GRASS.
     """
     
     import os;                    import pandas
     from gasp.fm.psql             import query_to_df
-    from gasp.cpu.arcg.anls.ovlay import union
-    from gasp.cpu.arcg.mng.fld    import calc_fld
-    from gasp.cpu.arcg.mng.wspace import create_geodb
     from gasp.cpu.psql.mng        import create_db, tbls_to_tbl
     from gasp.cpu.psql.mng.geom   import fix_geom, check_geomtype_in_table
     from gasp.cpu.psql.mng.geom   import select_main_geom_type
     from gasp.cpu.psql.mng.qw     import ntbl_by_query
     from gasp.prop.ff             import check_isRaster
-    from gasp.mng.gen             import copy_feat
     from gasp.oss                 import get_filename
     from gasp.to.psql             import shp_to_psql_tbl, df_to_pgsql
     from gasp.to.shp              import rst_to_polyg
     from gasp.to.shp              import shp_to_shp, psql_to_shp
     from gasp.to.xls              import psql_to_xls
     
+    # Check if folder exists, if not create it
+    if not os.path.exists(OUT_FOLDER):
+        from gasp.oss.ops import create_folder
+        create_folder(OUT_FOLDER, overwrite=None)
+    else:
+        raise ValueError('{} already exists!'.format(OUT_FOLDER))
+    
+    # Start GRASS GIS Session if GIS_SOFTWARE == GRASS
+    if GIS_SOFTWARE == "GRASS":
+        from gasp.cpu.grs      import run_grass
+        
+        gbase = run_grass(
+            OUT_FOLDER, grassBIN='grass76', location='shpdif', srs=SRS_CODE
+        )
+        
+        import grass.script as grass
+        import grass.script.setup as gsetup
+        
+        gsetup.init(gbase, OUT_FOLDER, 'shpdif', 'PERMANENT')
+        
+        from gasp.cpu.grs.conf import rst_to_region
+        from gasp.cpu.grs.mng.tbl import rename_col
+        from gasp.to.shp.grs   import shp_to_grs, grs_to_shp
+        from gasp.to.rst.grs   import rst_to_grs
+        
+        # Define g.region
+        if not RST_GRASS_TEMPLATE:
+            raise ValueError(
+                'To use GRASS GIS you need to specify RST_GRASS_TEMPLATE'
+            )
+        
+        tmpRst = rst_to_grs(RST_GRASS_TEMPLATE, get_filename(
+            RST_GRASS_TEMPLATE), as_cmd=True)
+        rst_to_region(tmpRst)
+    
     # Convert to SHAPE if file is Raster
+    # Import to GRASS GIS if GIS SOFTWARE == GRASS
+    i = 0
     for s in SHAPES_TO_COMPARE:
+        if not os.path.exists(s):
+            continue
+        
         isRaster = check_isRaster(s)
     
         if isRaster:
-            d = rst_to_polyg(s, os.path.join(
-                os.path.dirname(s), get_filename(s) + '.shp'
-            ), gisApi='arcpy')
+            if GIS_SOFTWARE == "ARCGIS":
+                d = rst_to_polyg(s, os.path.join(
+                    os.path.dirname(s), get_filename(s) + '.shp'
+                ), gisApi='arcpy')
         
-            SHAPES_TO_COMPARE[d] = "gridcode"
+                SHAPES_TO_COMPARE[d] = "gridcode"
         
-            del SHAPES_TO_COMPARE[s]
+                del SHAPES_TO_COMPARE[s]
+            
+            elif GIS_SOFTWARE == "GRASS":
+                # To GRASS
+                rstName = get_filename(s)
+                inRst   = rst_to_grs(s, "rst_" + rstName, as_cmd=True)
+                # To Raster
+                d       = rst_to_polyg(inRst, rstName,
+                    rstColumn="lulc_{}".format(i), gisApi="grasscmd")
+                
+                SHAPES_TO_COMPARE[d] = "lulc_{}".format(i)
+                
+                del SHAPES_TO_COMPARE[s]
     
         else:
-            continue
-    
-    # Sanitize data Add new field
-    __SHAPES_TO_COMPARE = {}
-    i = 0
-    
-    # Create GeoDatabase
-    geodb = create_geodb(OUT_FOLDER, 'geo_sanitize')
-    
-    """ Sanitize Data """
-    for k in SHAPES_TO_COMPARE:
-        # Send data to GeoDatabase only to sanitize
-        newFc = shp_to_shp(k, os.path.join(geodb, get_filename(k)))
-    
-        # Create a copy to change
-        newShp = copy_feat(newFc,
-            os.path.join(OUT_FOLDER, os.path.basename(k)), gisApi='arcpy'
-        )
-    
-        # Sanitize field name with interest data
-        NEW_FLD = "lulc_{}".format(i)
-        calc_fld(
-            newShp, NEW_FLD, "[{}]".format(SHAPES_TO_COMPARE[k]),
-            isNewField={"TYPE" : "INTEGER", "LENGTH" : 5, "PRECISION" : ""}
-        )
-    
-        __SHAPES_TO_COMPARE[newShp] = NEW_FLD
-    
+            if GIS_SOFTWARE == "ARCGIS":
+                continue
+            
+            elif GIS_SOFTWARE == "GRASS":
+                # To GRASS
+                grsVect = shp_to_grs(s, get_filename(s), asCMD=True)
+                
+                # Change name of column with comparing value
+                rename_col(
+                    grsVect, SHAPES_TO_COMPARE[s],
+                    "lulc_{}".format(i), as_cmd=True
+                )
+                
+                SHAPES_TO_COMPARE[grsVect] = "lulc_{}".format(i)
+                
+                del SHAPES_TO_COMPARE[s]
+        
         i += 1
+    
+    if GIS_SOFTWARE == "ARCGIS":
+        from gasp.cpu.arcg.mng.fld    import calc_fld
+        from gasp.cpu.arcg.mng.wspace import create_geodb
+        from gasp.mng.gen             import copy_feat
+        
+        # Sanitize data and Add new field
+        __SHAPES_TO_COMPARE = {}
+        i = 0
+    
+        # Create GeoDatabase
+        geodb = create_geodb(OUT_FOLDER, 'geo_sanitize')
+    
+        """ Sanitize Data """
+        for k in SHAPES_TO_COMPARE:
+            # Send data to GeoDatabase only to sanitize
+            newFc = shp_to_shp(
+                k, os.path.join(geodb, get_filename(k)), gisApi='arcpy')
+    
+            # Create a copy to change
+            newShp = copy_feat(newFc,
+                 os.path.join(OUT_FOLDER, os.path.basename(k)), gisApi='arcpy'
+            )
+    
+            # Sanitize field name with interest data
+            NEW_FLD = "lulc_{}".format(i)
+            calc_fld(
+                newShp, NEW_FLD, "[{}]".format(SHAPES_TO_COMPARE[k]),
+                isNewField={"TYPE" : "INTEGER", "LENGTH" : 5, "PRECISION" : ""}
+            )
+    
+            __SHAPES_TO_COMPARE[newShp] = NEW_FLD
+    
+            i += 1
+    
+    else:
+        __SHAPES_TO_COMPARE = SHAPES_TO_COMPARE
     
     # Create database
     conPARAM["DATABASE"] = create_db(conPARAM, DB)
@@ -92,7 +261,7 @@ def check_shape_diff(SHAPES_TO_COMPARE, OUT_FOLDER, REPORT, conPARAM, DB, SRS_CO
     
     def fix_geometry(shp):
         # Send data to PostgreSQL
-        nt = shp_to_psql_tbl(conPARAM, shp, srs_code, api='shp2pgsql')
+        nt = shp_to_psql_tbl(conPARAM, shp, SRS_CODE, api='shp2pgsql')
     
         # Fix data
         corr_tbl = fix_geom(
@@ -119,38 +288,55 @@ def check_shape_diff(SHAPES_TO_COMPARE, OUT_FOLDER, REPORT, conPARAM, DB, SRS_CO
     SHPS = __SHAPES_TO_COMPARE.keys()
     for i in range(len(SHPS)):
         for e in range(i + 1, len(SHPS)):
-            # Try the union thing
-            unShp = union([SHPS[i], SHPS[e]], os.path.join(
-                OUT_FOLDER, "un_{}_{}.shp".format(i, e)
-            ))
+            if GIS_SOFTWARE == 'ARCGIS':
+                # Try the union thing
+                unShp = union(SHPS[i], SHPS[e], os.path.join(
+                    OUT_FOLDER, "un_{}_{}.shp".format(i, e)
+                ), api_gis="arcpy")
         
-            # See if the union went all right
-            if not os.path.exists(unShp):
-                # Union went not well
+                # See if the union went all right
+                if not os.path.exists(unShp):
+                    # Union went not well
             
-                # See if geometry was already fixed
-                if SHPS[i] not in FIX_GEOM:
-                    # Fix SHPS[i] geometry
-                    FIX_GEOM[SHPS[i]] = fix_geometry(SHPS[i])
+                    # See if geometry was already fixed
+                    if SHPS[i] not in FIX_GEOM:
+                        # Fix SHPS[i] geometry
+                        FIX_GEOM[SHPS[i]] = fix_geometry(SHPS[i])
             
-                if SHPS[e] not in FIX_GEOM:
-                    FIX_GEOM[SHPS[e]] = fix_geometry(SHPS[e])
+                    if SHPS[e] not in FIX_GEOM:
+                        FIX_GEOM[SHPS[e]] = fix_geometry(SHPS[e])
             
-                # Run Union again
-                unShp = union([FIX_GEOM[SHPS[i]], FIX_GEOM[SHPS[e]]], os.path.join(
-                    OUT_FOLDER, "un_{}_{}_f.shp".format(i, e)
-                ))
+                    # Run Union again
+                    unShp = union(FIX_GEOM[SHPS[i]], FIX_GEOM[SHPS[e]], os.path.join(
+                        OUT_FOLDER, "un_{}_{}_f.shp".format(i, e)
+                    ), api_gis="arcpy")
+            
+            elif GIS_SOFTWARE == "GRASS":
+                __unShp = union(
+                    SHPS[i], SHPS[e], "un_{}_{}".format(i, e),
+                    api_gis="grass_cmd"
+                )
+                
+                rename_col(
+                    __unShp, "a_" + __SHAPES_TO_COMPARE[SHPS[i]],
+                    __SHAPES_TO_COMPARE[SHPS[i]], as_cmd=True
+                ); rename_col(
+                    __unShp, "b_" + __SHAPES_TO_COMPARE[SHPS[e]],
+                    __SHAPES_TO_COMPARE[SHPS[e]], as_cmd=True
+                )
+                
+                unShp = grs_to_shp(__unShp, os.path.join(
+                    OUT_FOLDER, __unShp + ".shp"), "area")
             
             UNION_SHAPE[(SHPS[i], SHPS[e])] = unShp
     
     # Send data one more time to postgresql
-    
     SYNTH_TBL = {}
     
     for uShp in UNION_SHAPE:
         # Send data to PostgreSQL
         union_tbl = shp_to_psql_tbl(
-            conPARAM, UNION_SHAPE[uShp], srs_code, api='shp2pgsql'
+            conPARAM, UNION_SHAPE[uShp], SRS_CODE, api='shp2pgsql'
         )
         
         # Produce table with % of area equal in both maps
@@ -310,6 +496,9 @@ def check_shape_diff(SHAPES_TO_COMPARE, OUT_FOLDER, REPORT, conPARAM, DB, SRS_CO
         get_filename(k[0]), get_filename(k[1]),
         get_filename(UNION_SHAPE[k])] for k in UNION_SHAPE],
         columns=['shp_a', 'shp_b', 'union_shp']
+    ) if GIS_SOFTWARE == "ARCGIS" else pandas.DataFrame([[
+        k[0], k[1], get_filename(UNION_SHAPE[k])] for k in UNION_SHAPE],
+        columns=['shp_a', 'shp_b', 'union_shp']
     )
     
     UNION_MAPPING = df_to_pgsql(conPARAM, UNION_MAPPING, 'union_map')
@@ -333,3 +522,143 @@ def check_shape_diff(SHAPES_TO_COMPARE, OUT_FOLDER, REPORT, conPARAM, DB, SRS_CO
     
     return REPORT
 
+
+"""
+Tools to be applied inside SGBD Software
+"""
+
+def sgbd_get_feat_within(conParam, inTbl, inGeom, withinTbl, withinGeom, outTbl,
+                         inTblCols=None, withinCols=None, outTblIsFile=None,
+                         apiToUse='OGR_SPATIALITE'):
+    """
+    Get Features within other Geometries in withinTbl
+    e.g. Intersect points with Polygons
+    
+    apiToUse options:
+    * OGR_SPATIALITE;
+    * POSTGIS.
+    """
+    
+    from gasp import goToList
+    
+    if not inTblCols and not withinCols:
+        colSelect = "intbl.*, witbl.*"
+    else:
+        if inTblCols and not withinCols:
+            colSelect = ", ".join([
+                "intbl.{}".format(c) for c in goToList(inTblCols)
+            ])
+        
+        elif not inTblCols and withinCols:
+            colSelect = ", ".join([
+                "witbl.{}".format(c) for c in goToList(withinCols)
+            ])
+        
+        else:
+            colSelect = "{}, {}".format(
+                ", ".join(["intbl.{}".format(c) for c in goToList(inTblCols)]),
+                ", ".join(["witbl.{}".format(c) for c in goToList(withinCols)])
+            )
+    
+    Q = (
+        "SELECT {selcols} FROM {in_tbl} AS intbl "
+        "INNER JOIN {within_tbl} AS witbl ON "
+        "ST_Within(intbl.{in_geom}, witbl.{wi_geom})"
+    ).format(
+        selcols=colSelect, in_tbl=inTbl, within_tbl=withinTbl,
+        in_geom=inGeom, wi_geom=withinGeom
+    )
+    
+    if apiToUse == "OGR_SPATIALITE":
+        if outTblIsFile:
+            from gasp.cpu.gdl.anls.exct import sel_by_attr
+            
+            sel_by_attr(conParam, Q, outTbl)
+        
+        else:
+            from gasp.cpu.gdl.sqdb import create_new_table_by_query
+            
+            create_new_table_by_query(conParam, outTbl, Q)
+    
+    elif apiToUse == 'POSTGIS':
+        if outTblIsFile:
+            from gasp.to.shp import psql_to_shp
+            
+            psql_to_shp(
+                conParam, Q, outTbl, api="pgsql2shp",
+                geom_col=None, tableIsQuery=True)
+        
+        else:
+            from gasp.cpu.psql.mng.qw import ntbl_by_query
+            
+            ntbl_by_query(conParam, outTbl, Q)
+    
+    else:
+        raise ValueError((
+            "API {} is not available. OGR_SPATIALITE and POSTGIS "
+            "are the only valid options"
+        ))
+    
+    return outTbl
+
+
+def sgbd_get_feat_not_within(dbcon, inTbl, inGeom, withinTbl, withinGeom, outTbl,
+                             inTblCols=None, outTblIsFile=None,
+                             apiToUse='OGR_SPATIALITE'):
+    """
+    Get features not Within with any of the features in withinTbl
+    
+    apiToUse options:
+    * OGR_SPATIALITE;
+    * POSTGIS.
+    """
+    
+    from gasp import goToList
+    
+    Q = (
+        "SELECT {selCols} FROM {tbl} AS in_tbl WHERE ("
+        "in_tbl.{in_geom} NOT IN ("
+            "SELECT inin_tbl.{in_geom} FROM {wi_tbl} AS wi_tbl "
+            "INNER JOIN {tbl} AS inin_tbl ON "
+            "ST_Within(wi_tbl.{wi_geom}, inin_tbl.{in_geom})"
+        "))"
+    ).format(
+        selCols = "*" if not inTblCols else ", ".join(goToList(inTblCols)),
+        tbl     = inTbl,
+        in_geom = inGeom,
+        wi_tbl  = withinTbl,
+        wi_geom = withinGeom
+    )
+    
+    if apiToUse == "OGR_SPATIALITE":
+        if outTblIsFile:
+            from gasp.cpu.gdl.anls.exct import sel_by_attr
+            
+            sel_by_attr(dbcon, Q, outTbl)
+        
+        else:
+            from gasp.cpu.gdl.sqdb import create_new_table_by_query
+            
+            create_new_table_by_query(dbcon, outTbl, Q)
+    
+    elif apiToUse == "POSTGIS":
+        if outTblIsFile:
+            from gasp.to.shp import psql_to_shp
+            
+            psql_to_shp(
+                dbcon, Q, outTbl, api='pgsql2shp',
+                geom_col=None, tableIsQuery=True
+            )
+        
+        else:
+            from gasp.cpu.psql.mng.qw import ntbl_by_query
+            
+            ntbl_by_query(dbcon, outTbl, Q)
+    
+    else:
+        raise ValueError((
+            "API {} is not available. OGR_SPATIALITE and POSTGIS "
+            "are the only valid options"
+        ))
+    
+    return outTbl

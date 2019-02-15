@@ -165,6 +165,8 @@ def get_cellsize(rst, xy=False, bnd=None, gisApi='gdal'):
     import os
     
     if gisApi == 'gdal':
+        from osgeo import gdal
+        
         def __get_cellsize(__rst):
             img = gdal.Open(__rst)
             (upper_left_x, x_size, x_rotation,

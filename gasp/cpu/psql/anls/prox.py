@@ -5,123 +5,107 @@ Tools for process geographic data on PostGIS
 from gasp.cpu.psql import connection
 
 
-def near(link, first_tbl, second_tbl, dist, output, near_field='near'):
+def st_near(link, inTbl, inTblPK, inGeom, nearTbl, nearGeom, output,
+            near_col='near', untilDist=None, colsInTbl=None, colsNearTbl=None):
     """
     Near tool for PostGIS
-    
-    Parameters meaning:
-    
-    * link = dict with meta to connect to PostgreSQL
-    
-    * first_tbl = dict with meta of the table that will be store the minimum
-    distance between the features of this table and the nearest feature of the
-    second table. E.g. {table_name: {'pk': value, 'geom': value, 'fields': 
-    list_value_with_other_interest_fields}}
-    
-    * second_tbl = dict with meta of the second table. Dict with the same 
-    structure
-    
-    * dist = if a distance is greater than this variable, it will be stored on
-    the output table having a dist value of -1.0
-    
-    * output = name of the output table
-    
-    * near_field = name of the field that will receive the nearest distance
-    values
-    
-    Returns:
-    result table name, pk, geom and near field
     """
     
-    # Table names
-    first_table = first_tbl.keys()[0]
-    second_table = second_tbl.keys()[0]
+    from gasp import goToList
+    from gasp.cpu.psql.mng.qw import ntbl_by_query
     
-    # Fields to select from the two tables
-    try:
-        first_fields = first_tbl[first_table]['fields']
-    except:
-        first_fields = []
-    try:
-        second_fields = second_tbl[second_table]['fields']
-    except:
-        second_fields = []
-    
-    # The SQL query depends on the number of fields on the previous lists
-    if len(first_fields) == 0 and len(second_fields) == 0:
-        sql_fields = "s.{pk_f}, s.{g_f}, h.{pk_s} AS sid".format(
-            pk_f = first_tbl[first_table]['pk'],
-            g_f  = first_tbl[first_table]['geom'],
-            pk_s = second_tbl[second_table]['pk'],
-            g_s  = second_tbl[second_table]['geom'],
-        )
-    elif len(first_fields) != 0 and len(second_fields) == 0:
-        sql_fields = "s.{pk_f}, s.{g_f}, {flds}, h.{pk_s} AS sid".format(
-            pk_f = first_tbl[first_table]['pk'],
-            g_f  = first_tbl[first_table]['geom'],
-            pk_s = second_tbl[second_table]['pk'],
-            g_s  = second_tbl[second_table]['geom'],
-            flds = ", ".join(['s.{f}'.format(f=x) for x in first_fields])
-        )
-    elif len(first_fields) == 0 and len(second_fields) != 0:
-        sql_fields = "s.{pk_f}, s.{g_f}, {flds}, h.{pk_s} AS sid".format(
-            pk_f = first_tbl[first_table]['pk'],
-            g_f  = first_tbl[first_table]['geom'],
-            pk_s = second_tbl[second_table]['pk'],
-            g_s  = second_tbl[second_table]['geom'],
-            flds = ", ".join(['h.{f}'.format(f=x) for x in second_fields])            
-        )
-    elif len(first_fields) != 0 and len(second_fields) != 0:
-        sql_fields = "s.{pk_f}, s.{g_f}, {fflds}, {sflds}, h.{pk_s} AS sid".format(
-            pk_f  = first_tbl[first_table]['pk'],
-            g_f   = first_tbl[first_table]['geom'],
-            pk_s  = second_tbl[second_table]['pk'],
-            g_s   = second_tbl[second_table]['geom'],
-            fflds = ", ".join(['s.{f}'.format(f=x) for x in first_fields]),
-            sflds = ", ".join(['h.{f}'.format(f=x) for x in second_fields])            
-        )
-    
-    # Connect to PostgreSQL
-    c = connection(link)
-    
-    cursor = c.cursor()
-    
-    cursor.execute((
-        "CREATE TABLE {out} AS "
-        "SELECT DISTINCT ON (s.{pk_f}) "
-        "{fld_sel}, "
+    _out = ntbl_by_query(link, output, (
+        "SELECT DISTINCT ON (s.{colPk}) "
+        "{inTblCols}, {nearTblCols}"
         "ST_Distance("
-            "s.{g_f}, h.{g_s}"
-        ") AS {near} FROM {frst} s LEFT JOIN {scnd} h ON "
-        "ST_DWithin(s.{g_f}, h.{g_s}, {d}) ORDER BY s.{pk_f}, "
-        "ST_Distance(s.{g_f}, s.{g_s});"
+            "s.{ingeomCol}, h.{negeomCol}"
+        ") AS {nearCol} FROM {in_tbl} AS s "
+        "LEFT JOIN {near_tbl} AS h "
+        "ON ST_DWithin(s.{ingeomCol}, h.{negeomCol}, {dist_v}) "
+        "ORDER BY s.{colPk}, ST_Distance(s.{ingeomCol}, h.{negeomCol})"
     ).format(
-        out=output,
-        pk_f=first_tbl[first_table]['pk'],
-        pk_s=second_tbl[second_table]['pk'],
-        g_f=first_tbl[first_table]['geom'],
-        g_s=second_tbl[second_table]['geom'],
-        frst=first_table,
-        scnd=second_table,
-        d=dist, near=near_field,
-        fld_sel=sql_fields
+        colPk=inTblPK,
+        inTblCols="s.*" if not colsInTbl else ", ".join([
+            "s.{}".format(x) for x in goToList(colsInTbl)
+        ]),
+        nearTblCols="" if not colsNearTbl else ", ".join([
+            "h.{}".format(x) for x in goToList(colsNearTbl)
+        ]) + ", ",
+        ingeomCol=inGeom, negeomCol=nearGeom,
+        nearCol=near_col, in_tbl=inTbl, near_tbl=nearTbl,
+        dist_v="100000" if not untilDist else untilDist
     ))
     
-    cursor.execute(
-        "ALTER TABLE {tbl} ADD CONSTRAINT {tbl}_pk PRIMARY KEY ({fld});".format(
-            tbl=output, fld=first_tbl[first_table]['pk']
-        )
-    )
-    cursor.execute(
-        "UPDATE {tbl} SET near=-1.0 WHERE near IS NULL;".format(
-            tbl=output
-        )
+    
+    return output
+
+
+def st_near2(link, inTbl, inGeom, nearTbl, nearGeom, output,
+            near_col='near'):
+    """
+    Near tool for PostGIS
+    """
+    
+    from gasp                 import goToList
+    from gasp.cpu.psql.mng.qw import ntbl_by_query
+    
+    _out = ntbl_by_query(link, output, (
+        "SELECT m.*, ST_Distance(m.{ingeom}, j.geom) AS {distCol} "
+        "FROM {t} AS m, ("
+            "SELECT ST_UnaryUnion(ST_Collect({neargeom})) AS geom "
+            "FROM {tblNear}"
+        ") AS j"
+    ).format(
+        ingeom=inGeom, distCol=near_col, t=inTbl, neargeom=nearGeom,
+        tblNear=nearTbl
+    ))
+    
+    
+    return output
+
+
+def st_buffer(conParam, inTbl, bfDist, geomCol, outTbl, bufferField="geometry",
+              whrClause=None, dissolve=None, cols_select=None, outTblIsFile=None):
+    """
+    Using Buffer on PostGIS Data
+    """
+    
+    from gasp import goToList
+    
+    dissolve = goToList(dissolve) if dissolve != "ALL" else "ALL"
+    
+    SEL_COLS = "" if not cols_select else ", ".join(goToList(cols_select))
+    DISS_COLS = "" if not dissolve or dissolve == "ALL" else ", ".join(dissolve)
+    GRP_BY = "" if not dissolve else "{}, {}".format(SEL_COLS, DISS_COLS) if \
+        SEL_COLS != "" and DISS_COLS != "" else SEL_COLS \
+        if SEL_COLS != "" else DISS_COLS if DISS_COLS != "" else ""
+    
+    Q = (
+        "SELECT{sel}{spFunc}{geom}, {_dist}{endFunc} AS {bf} "
+        "FROM {t}{whr}{grpBy}"
+    ).format(
+        sel = " " if not cols_select else " {}, ".format(SEL_COLS),
+        spFunc="ST_Buffer(" if not dissolve else \
+            "ST_UnaryUnion(ST_Collect(ST_Buffer(",
+        geom=geomCol, _dist=bfDist,
+        endFunc=")" if not dissolve else ")))",
+        t=inTbl,
+        grpBy=" GROUP BY {}".format(GRP_BY) if GRP_BY != "" else "",
+        whr="" if not whrClause else " WHERE {}".format(whrClause),
+        bf=bufferField
     )
     
-    c.commit()
-    cursor.close()
-    c.close()
+    if not outTblIsFile:
+        from gasp.cpu.psql.mng.qw import ntbl_by_query
+        
+        outTbl = ntbl_by_query(conParam, outTbl, Q)
+    else:
+        from gasp.to.shp import psql_to_shp
+        
+        psql_to_shp(
+            conParam, Q, outTbl, api='pgsql2shp',
+            geom_col=bufferField, tableIsQuery=True
+        )
     
-    return [output, first_tbl[first_table]['pk'],
-            first_tbl[first_table]['geom'], near_field]
+    return outTbl
 

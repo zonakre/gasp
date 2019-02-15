@@ -29,6 +29,27 @@ def shp_to_grs(inLyr, outLyr, filterByReg=None, asCMD=None):
     return outLyr
 
 
+def psql_to_grs(conParam, table, outLyr, where=None, notTable=None,
+                filterByReg=None):
+    """
+    Add Shape to GRASS GIS from PGSQL
+    """
+    
+    from gasp import exec_cmd
+    
+    rcmd = exec_cmd((
+        "v.in.ogr input=\"PG:host={} dbname={} user={} password={} "
+        "port={}\" output={} layer={}{}{}{} -o --overwrite --quiet" 
+    ).format(conParam["HOST"], conParam["DATABASE"], conParam["USER"],
+        conParam["PASSWORD"], conParam["PORT"], outLyr, table,
+        "" if not where else " where=\"{}\"".format(where),
+        " -t" if notTable else "",
+        " -r" if filterByReg else ""
+    ))
+    
+    return outLyr
+
+
 def grs_to_shp(inLyr, outLyr, geomType, lyrN=1, asCMD=True, asMultiPart=None):
     """
     GRASS Vector to Shape File

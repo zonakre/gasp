@@ -747,7 +747,7 @@ def gdl_mean_time_wByPop(unities, unities_groups, population_field,
     
     import os
     from osgeo                   import ogr
-    from gasp.cpu.gdl            import drv_name
+    from gasp.prop.ff            import drv_name
     from gasp.fm.shp             import points_to_list
     from gasp.cpu.gdl.mng.feat   import feat_to_pnt
     from gasp.cpu.gdl.mng.prj    import project_geom

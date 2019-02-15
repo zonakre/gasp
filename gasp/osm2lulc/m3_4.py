@@ -4,7 +4,7 @@ Rule 3 and 4 - Area upper than and less than
 
 from gasp.osm2lulc.var   import DB_SCHEMA
 
-def rst_area(osmdata, polygonTable, UPPER=True):
+def rst_area(osmLink, polygonTable, UPPER=True, api='SQLITE'):
     """
     Select features with area upper than.
     
@@ -12,24 +12,26 @@ def rst_area(osmdata, polygonTable, UPPER=True):
     """
     
     import datetime
-    from gasp.fm.sqLite    import sqlq_to_df
-    from gasp.to.rst.grs   import shp_to_raster
-    from gasp.to.shp.grs   import sqlite_to_shp
-    from gasp.osm2lulc.var import GEOM_AREA
+    if api == 'POSTGIS':
+        from gasp.fm.psql    import query_to_df as sqlq_to_df
+        from gasp.to.shp.grs import psql_to_grs as db_to_grs
+    else:
+        from gasp.fm.sqLite  import sqlq_to_df
+        from gasp.to.shp.grs import sqlite_to_shp as db_to_grs
+    from gasp.to.rst.grs     import shp_to_raster
+    from gasp.osm2lulc.var   import GEOM_AREA
     
     RULE_COL = 'area_upper' if UPPER else 'area_lower'
     OPERATOR = " > " if UPPER else " < "
     
-    WHR = "{ga} {op} t_{r}".format(
-        op=OPERATOR, r=RULE_COL, ga=GEOM_AREA
-    )
+    WHR = "{ga} {op} t_{r} AND {r}={cls_}"
     
     # Get Classes
     time_a = datetime.datetime.now().replace(microsecond=0)
-    lulcCls = sqlq_to_df(osmdata, (
-        "SELECT {r} FROM {tbl} WHERE {wh} GROUP BY {r}"
+    lulcCls = sqlq_to_df(osmLink, (
+        "SELECT {r} FROM {tbl} WHERE {ga} {op} t_{r} GROUP BY {r}"
     ).format(
-         r=RULE_COL, tbl=polygonTable, wh=WHR
+         r=RULE_COL, tbl=polygonTable, ga=GEOM_AREA, op=OPERATOR
     ))[RULE_COL].tolist()
     time_b = datetime.datetime.now().replace(microsecond=0)
     
@@ -40,9 +42,11 @@ def rst_area(osmdata, polygonTable, UPPER=True):
     tk = 1
     for cls in lulcCls:
         time_x = datetime.datetime.now().replace(microsecond=0)
-        grsVect = sqlite_to_shp(
-            osmdata, polygonTable, RULE_COL,
-            where=WHR, notTable=True
+        grsVect = db_to_grs(
+            osmLink, polygonTable, "{}_{}".format(RULE_COL, cls),
+            where=WHR.format(
+                op=OPERATOR, r=RULE_COL, ga=GEOM_AREA, cls_=cls
+            ), notTable=True, filterByReg=True
         )
         time_y = datetime.datetime.now().replace(microsecond=0)
         timeGasto[tk] = ('import_{}'.format(cls), time_y - time_x)
@@ -60,7 +64,7 @@ def rst_area(osmdata, polygonTable, UPPER=True):
     return clsRst, timeGasto
 
 
-def grs_vect_selbyarea(osmdb, polyTbl, UPPER=True):
+def grs_vect_selbyarea(osmcon, polyTbl, UPPER=True, apidb='SQLITE'):
     """
     Select features with area upper than.
     
@@ -70,9 +74,14 @@ def grs_vect_selbyarea(osmdb, polyTbl, UPPER=True):
     import datetime
     from gasp.cpu.grs.mng.genze import dissolve
     from gasp.cpu.grs.mng.tbl   import add_table
-    from gasp.sqLite.i          import count_rows_in_query
-    from gasp.to.shp.grs        import sqlite_to_shp
     from gasp.osm2lulc.var      import GEOM_AREA
+    if apidb != 'POSTGIS':
+        from gasp.sqLite.i   import count_rows_in_query as cnt_row
+        from gasp.to.shp.grs import sqlite_to_shp as db_to_shp
+    else:
+        from gasp.cpu.psql.i import get_row_number as cnt_row
+        from gasp.to.shp.grs import psql_to_grs as db_to_shp
+        
     
     OPERATOR  = ">" if UPPER else "<"
     DIRECTION = "upper" if UPPER else "lower"
@@ -83,14 +92,16 @@ def grs_vect_selbyarea(osmdb, polyTbl, UPPER=True):
     
     # Check if we have interest data
     time_a = datetime.datetime.now().replace(microsecond=0)
-    N = count_rows_in_query(osmdb, polyTbl, where=WHR)
+    N = cnt_row(osmcon, polyTbl, where=WHR)
     time_b = datetime.datetime.now().replace(microsecond=0)
     
-    if not N: return None, {0 : ('count_rows_roads', time_b - time_a)}
+    if not N: return None, {0 : ('count_rows', time_b - time_a)}
     
     # Data to GRASS GIS
-    grsVect = sqlite_to_shp(
-        osmdb, polyTbl, "area_{}".format(DIRECTION), where=WHR)
+    grsVect = db_to_shp(
+        osmcon, polyTbl, "area_{}".format(DIRECTION), where=WHR,
+        filterByReg=True
+    )
     time_c = datetime.datetime.now().replace(microsecond=0)
     
     dissVect = dissolve(
@@ -108,31 +119,37 @@ def grs_vect_selbyarea(osmdb, polyTbl, UPPER=True):
     }
 
 
-def num_selbyarea(osmdt, polyTbl, folder, cellsize, srscode, rstTemplate,
-                  UPPER=True):
+def num_selbyarea(osmLink, polyTbl, folder, cellsize, srscode, rstTemplate,
+                  UPPER=True, api='SQLITE'):
     """
     Select features with area upper than.
     
     A field with threshold is needed in the database.
     """
     
-    import datetime;            import os
-    from threading              import Thread
-    from gasp.fm.sqLite         import sqlq_to_df
-    from gasp.cpu.gdl.anls.exct import sel_by_attr
-    from gasp.to.rst.gdl        import shp_to_raster
-    from gasp.osm2lulc.var      import GEOM_AREA
+    import datetime;                import os
+    from threading                  import Thread
+    if api == 'SQLITE':
+        from gasp.fm.sqLite         import sqlq_to_df
+        from gasp.cpu.gdl.anls.exct import sel_by_attr
+    else:
+        from gasp.fm.psql           import query_to_df as sqlq_to_df
+        from gasp.to.shp            import psql_to_shp as sel_by_attr
+    from gasp.to.rst.gdl            import shp_to_raster
+    from gasp.osm2lulc.var          import GEOM_AREA
     
     # Get OSM Features to be selected for this rule
     RULE_COL = 'area_upper' if UPPER else 'area_lower'
     OPERATOR = " > " if UPPER else " < "
-    WHR = "{ga} {op} t_{r}".format(op=OPERATOR, r=RULE_COL, ga=GEOM_AREA)
+    WHR = "{ga} {op} t_{r} AND {r}={cls_}"
     
     # Get Classes
     time_a = datetime.datetime.now().replace(microsecond=0)
-    lulcCls = sqlq_to_df(osmdt, (
-        "SELECT {r} FROM {tbl} WHERE {wh} GROUP BY {r}"
-    ).format(r=RULE_COL, tbl=polyTbl, wh=WHR))[RULE_COL].tolist()
+    lulcCls = sqlq_to_df(osmLink, (
+        "SELECT {r} FROM {tbl} WHERE {ga} {op} t_{r} GROUP BY {r}"
+    ).format(
+        r=RULE_COL, tbl=polyTbl, ga=GEOM_AREA, op=OPERATOR
+    ))[RULE_COL].tolist()
     time_b = datetime.datetime.now().replace(microsecond=0)
     
     timeGasto = {0 : ('check_cls', time_b - time_a)}
@@ -143,15 +160,25 @@ def num_selbyarea(osmdt, polyTbl, folder, cellsize, srscode, rstTemplate,
     )
     def selAndExport(CLS, cnt):
         time_x = datetime.datetime.now().replace(microsecond=0)
-        shpCls = sel_by_attr(
-            osmdt, SQL_Q.format(c=str(CLS), tbl=polyTbl, w=WHR),
-            os.path.join(folder, "area_{}.shp".format(CLS))
-        )
+        if api == "SQLITE":
+            shpCls = sel_by_attr(
+                osmLink, SQL_Q.format(c=str(CLS), tbl=polyTbl, w=WHR.format(
+                    op=OPERATOR, r=RULE_COL, ga=GEOM_AREA, cls_=CLS
+                )),
+                os.path.join(folder, "{}_{}.shp".format(RULE_COL,CLS))
+            )
+        else:
+            shpCls = sel_by_attr(
+                osmLink, SQL_Q.format(c=str(CLS), tbl=polyTbl, w=WHR.format(
+                    op=OPERATOR, r=RULE_COL, ga=GEOM_AREA, cls_=CLS
+                )), os.path.join(folder, "{}_{}.shp".format(RULE_COL, str(CLS))),
+                api='pgsql2shp', geom_col="geometry", tableIsQuery=True
+            )
         time_y = datetime.datetime.now().replace(microsecond=0)
         
         rst = shp_to_raster(
-            shpCls, cellsize, -1, os.path.join(
-                folder, "area_{}.tif".format(CLS)
+            shpCls, cellsize, 0, os.path.join(
+                folder, "{}_{}.tif".format(RULE_COL, CLS)
             ), srscode, rstTemplate
         )
         time_z = datetime.datetime.now().replace(microsecond=0)
@@ -228,3 +255,19 @@ def arcg_area(polyTbl, lulcNomenclature, UPPER=True):
     
     return clsVect
 
+
+def sel_by_dist_to_pop():
+    """
+    The assign of OSM Features to the 3 or 14 LULC Class depends one the
+    distance to the population 
+    """
+    
+    # For POPULATION DATASET or Residential Building Dataset:
+    # To Point | Focal Statistic | Select areas > than threshold |
+    # Distance to these areas | Assign classes based on the distance relation
+    
+    # Other option is:
+    # Check if inside the polygons are things normaly within green urban spaces
+    # parques infantis, etc.
+    
+    return None

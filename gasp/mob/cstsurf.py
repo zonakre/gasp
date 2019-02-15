@@ -19,7 +19,7 @@ def acost_surface(mdt, tax_cos, cos, leg_cos, barr, rdv, fldRdv, w, SupCst):
     from gasp.cpu.arcg.mng.fld         import add_field
     from gasp.cpu.arcg.mng.fld         import list_fields
     from gasp.cpu.arcg.mng.rst.dataset import mosaic_to_raster
-    from gasp.cpu.arcg.anls.ovlay      import union
+    from gasp.anls.ovlay               import union
     from gasp.to.rst.arcg              import shp_to_rasters
     
     def GetRules4Slope():
@@ -146,7 +146,7 @@ def acost_surface(mdt, tax_cos, cos, leg_cos, barr, rdv, fldRdv, w, SupCst):
         linha=up_cursor.next()
     del up_cursor, linha
     # Union Landuse/barreiras
-    barrcos = Union([barr, cos], "barrcos.shp")
+    barrcos = union(barr, cos, "barrcos.shp", gis_api="arcpy")
     # Identify barreiras
     cursor = arcpy.UpdateCursor(barrcos)
     for i in cursor:

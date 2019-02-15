@@ -96,6 +96,26 @@ def rename_tbl(conParam, table, newName):
     return newName
 
 
+def add_idx_to_geom(conParam, table, geomCol):
+    """
+    Add index to Geometry
+    """
+    
+    con = connection(conParam)
+    cursor = con.cursor()
+    
+    cursor.execute("CREATE INDEX {tbl}_{col}_idx ON {tbl} USING gist ({col})".format(
+        tbl=table, col=geomCol
+    ))
+    
+    con.commit()
+    
+    cursor.close()
+    con.close()
+    
+    return table
+
+
 def tbls_to_tbl(conParam, lst_tables, outTable):
     """
     Append all tables in lst_tables into the outTable

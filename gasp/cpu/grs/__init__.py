@@ -36,7 +36,7 @@ def start_grass_linux_newLocation(gisdb, location, srs,
                 'GRASS GIS 7 Location already exists'
             )
     
-    grassbin = grassBin if grassBin else 'grass74'
+    grassbin = grassBin if grassBin else 'grass76'
     startcmd = grassbin + ' --config path'
     
     outcmd = exec_cmd(startcmd)
@@ -79,7 +79,7 @@ def start_grass_linux_existLocation(gisdb, grassBin=None):
     Use a existing location
     """
     
-    grassbin = grassBin if grassBin else 'grass74'
+    grassbin = grassBin if grassBin else 'grass76'
     startcmd = grassbin + ' --config path'
     
     outcmd = exec_cmd(startcmd)
@@ -132,7 +132,7 @@ def start_grass_win_newLocation(gisdb, location, srs, grassBin, overwrite=True):
             )
     
     # the path to grass can't have white spaces
-    grassbin = grassBin if grassBin else 'grass74'
+    grassbin = grassBin if grassBin else 'grass76'
     startcmd = grassbin + ' --config path'
     outcmd = exec_cmd(startcmd)
     
@@ -172,7 +172,7 @@ def start_grass_win_exisLocation(gisdb, grassBin=None):
     Use an existing Location
     """
     
-    grassbin = grassBin if grassBin else 'grass74'
+    grassbin = grassBin if grassBin else 'grass76'
     startcmd = grassBin + ' --config path'
     outcmd   = exec_cmd(startcmd)
     
@@ -190,7 +190,7 @@ def start_grass_win_exisLocation(gisdb, grassBin=None):
     return gisbase
 
 
-def run_grass(workspace, grassBIN='grass74', location=None, srs=None):
+def run_grass(workspace, grassBIN='grass76', location=None, srs=None):
     """
     Generic method that could be used to put GRASS GIS running in any Os
     

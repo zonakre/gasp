@@ -107,7 +107,7 @@ def cost_surface(dem, lulc, cls_lulc, prod_lulc, roads, kph, barr,
     from gasp.cpu.grs.spanlst.rcls import category_rules
     from gasp.cpu.grs.spanlst.rcls import grass_set_null
     from gasp.cpu.grs.mng.tbl      import add_field, update_table
-    from gasp.cpu.grs.anls.ovlay   import union
+    from gasp.anls.ovlay           import union
     from gasp.to.rst.grs           import shp_to_raster, rst_to_grs, grs_to_rst
     from gasp.to.shp.grs           import shp_to_grs
     from gasp.cpu.grs.spanlst      import mosaic_raster
@@ -138,7 +138,7 @@ def cost_surface(dem, lulc, cls_lulc, prod_lulc, roads, kph, barr,
     # LULC - Dissolve, union with barriers and conversion to raster
     lulc_shp = edit_lulc(lulc, cls_lulc, lulc_weight)
     shp_to_grs(barr, 'barriers')
-    union(lulc_shp['shp'], 'barriers', 'barrcos')
+    union(lulc_shp['shp'], 'barriers', 'barrcos', api_gis="grass")
     update_table('barrcos', 'a_' + lulc_shp['fld'], 99, 'b_cat=1')
     shp_to_raster('barrcos', 'rst_barrcos', 'a_' + lulc_shp['fld'], 'area')
     
@@ -213,7 +213,7 @@ def cstDistance_with_motorway(
     import os
     
     from gasp.oss.ops          import create_folder
-    from gasp.cpu.gdl          import drv_name
+    from gasp.prop.ff          import drv_name
     from gasp.cpu.grs.spanlst  import mapcalc, rcost, rseries
     from gasp.to.rst.grs       import shp_to_raster, rst_to_grs
     from gasp.cpu.gdl.sampling import gdal_values_to_points

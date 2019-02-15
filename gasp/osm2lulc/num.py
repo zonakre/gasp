@@ -4,17 +4,21 @@ OSM2LULC using Numpy
 
 
 def osm2lulc(osmdata, nomenclature, refRaster, lulcRst,
-             epsg=3857, overwrite=None, dataStore=None):
+             epsg=3857, overwrite=None, dataStore=None, roadsAPI='SQLITE'):
     """
     Convert OSM data into Land Use/Land Cover Information
     
     A matrix based approach
+    
+    roadsAPI Options:
+    * SQLITE
+    * POSTGIS
     """
     
     # ************************************************************************ #
     # Python Modules from Reference Packages #
     # ************************************************************************ #
-    import os; import numpy; import datetime
+    import os; import numpy; import datetime; import json
     from threading import Thread
     from osgeo     import gdal
     # ************************************************************************ #
@@ -23,9 +27,15 @@ def osm2lulc(osmdata, nomenclature, refRaster, lulcRst,
     from gasp.fm.rst         import rst_to_array
     from gasp.prop.rst       import get_cellsize
     from gasp.oss.ops        import create_folder, copy_file
-    from gasp.osm2lulc.utils import osm_to_sqdb, osm_project, add_lulc_to_osmfeat
+    if roadsAPI == 'POSTGIS':
+        from gasp.cpu.psql.mng   import create_db
+        from gasp.osm2lulc.utils import osm_to_pgsql
+        from gasp.osm2lulc.mod2  import pg_num_roads
+    else:
+        from gasp.osm2lulc.utils import osm_to_sqdb
+        from gasp.osm2lulc.mod2  import num_roads
+    from gasp.osm2lulc.utils import osm_project, add_lulc_to_osmfeat
     from gasp.osm2lulc.mod1  import num_selection
-    from gasp.osm2lulc.mod2  import num_roads
     from gasp.osm2lulc.m3_4  import num_selbyarea
     from gasp.osm2lulc.mod5  import num_base_buffer
     from gasp.osm2lulc.mod6  import num_assign_builds
@@ -35,6 +45,11 @@ def osm2lulc(osmdata, nomenclature, refRaster, lulcRst,
     # ************************************************************************ #
     if not os.path.exists(os.path.dirname(lulcRst)):
         raise ValueError('{} does not exist!'.format(os.path.dirname(lulcRst)))
+    
+    conPGSQL = json.load(open(os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        'con-postgresql.json'
+    ), 'r')) if roadsAPI == 'POSTGIS' else None
     
     time_a = datetime.datetime.now().replace(microsecond=0)
     from gasp.osm2lulc.var import osmTableData, PRIORITIES
@@ -54,19 +69,30 @@ def osm2lulc(osmdata, nomenclature, refRaster, lulcRst,
     CELLSIZE = get_cellsize(refRaster, xy=False, gisApi='gdal')
     time_b = datetime.datetime.now().replace(microsecond=0)
     # ************************************************************************ #
-    # Convert OSM file to SQLITE DB #
+    # Convert OSM file to SQLITE DB or to POSTGIS DB #
     # ************************************************************************ #
-    osm_db = osm_to_sqdb(osmdata, os.path.join(workspace, 'osm.sqlite'))
+    if roadsAPI == 'POSTGIS':
+        conPGSQL["DATABASE"] = create_db(conPGSQL, os.path.splitext(
+            os.path.basename(osmdata))[0], overwrite=True)
+        osm_db = osm_to_pgsql(osmdata, conPGSQL)
+    
+    else:
+        osm_db = osm_to_sqdb(osmdata, os.path.join(workspace, 'osm.sqlite'))
     time_c = datetime.datetime.now().replace(microsecond=0)
     # ************************************************************************ #
     # Add Lulc Classes to OSM_FEATURES by rule #
     # ************************************************************************ #
-    add_lulc_to_osmfeat(osm_db, osmTableData, nomenclature)
+    add_lulc_to_osmfeat(
+        conPGSQL if roadsAPI=='POSTGIS' else osm_db,
+        osmTableData, nomenclature, api=roadsAPI
+    )
     time_d = datetime.datetime.now().replace(microsecond=0)
     # ************************************************************************ #
     # Transform SRS of OSM Data #
     # ************************************************************************ #
-    osmTableData = osm_project(osm_db, epsg)
+    osmTableData = osm_project(
+        conPGSQL if roadsAPI == 'POSTGIS' else osm_db, epsg, api=roadsAPI
+    )
     time_e = datetime.datetime.now().replace(microsecond=0)
     # ************************************************************************ #
     # MapResults #
@@ -79,16 +105,16 @@ def osm2lulc(osmdata, nomenclature, refRaster, lulcRst,
         time_start = datetime.datetime.now().replace(microsecond=0)
         _osmdb = copy_file(
             osm_db, os.path.splitext(osm_db)[0] + '_r{}.sqlite'.format(ruleID)
-        )
+        ) if roadsAPI == 'SQLITE' else None
         # ******************************************************************** #
         # 1 - Selection Rule #
         # ******************************************************************** #
         if ruleID == 1:
             res, tm = num_selection(
-                _osmdb, osmTableData['polygons'], workspace,
-                CELLSIZE, epsg, refRaster
+                conPGSQL if not _osmdb else _osmdb,
+                osmTableData['polygons'], workspace, CELLSIZE, epsg, refRaster,
+                api=roadsAPI
             )
-        
         # ******************************************************************** #
         # 2 - Get Information About Roads Location #
         # ******************************************************************** #
@@ -97,6 +123,10 @@ def osm2lulc(osmdata, nomenclature, refRaster, lulcRst,
                 _osmdb, nomenclature, osmTableData['lines'],
                 osmTableData['polygons'], workspace, CELLSIZE, epsg,
                 refRaster
+            ) if _osmdb else pg_num_roads(
+                conPGSQL, nomenclature,
+                osmTableData['lines'], osmTableData['polygons'],
+                workspace, CELLSIZE, epsg, refRaster
             )
         
         # ******************************************************************** #
@@ -104,8 +134,9 @@ def osm2lulc(osmdata, nomenclature, refRaster, lulcRst,
         # ******************************************************************** #
         elif ruleID == 3:
             res, tm = num_selbyarea(
-                _osmdb, osmTableData['polygons'], workspace,
-                CELLSIZE, epsg, refRaster, UPPER=True
+                conPGSQL if not _osmdb else _osmdb,
+                osmTableData['polygons'], workspace,
+                CELLSIZE, epsg, refRaster, UPPER=True, api=roadsAPI
             )
         
         # ******************************************************************** #
@@ -113,8 +144,9 @@ def osm2lulc(osmdata, nomenclature, refRaster, lulcRst,
         # ******************************************************************** #
         elif ruleID == 4:
             res, tm = num_selbyarea(
-                _osmdb, osmTableData['polygons'], workspace,
-                CELLSIZE, epsg, refRaster, UPPER=False
+                conPGSQL if not _osmdb else _osmdb,
+                osmTableData['polygons'], workspace,
+                CELLSIZE, epsg, refRaster, UPPER=False, api=roadsAPI
             )
         
         # ******************************************************************** #
@@ -122,8 +154,9 @@ def osm2lulc(osmdata, nomenclature, refRaster, lulcRst,
         # ******************************************************************** #
         elif ruleID == 5:
             res, tm = num_base_buffer(
-                _osmdb, osmTableData['lines'], workspace,
-                CELLSIZE, epsg, refRaster
+                conPGSQL if not _osmdb else _osmdb,
+                osmTableData['lines'], workspace,
+                CELLSIZE, epsg, refRaster, api=roadsAPI
             )
         # ******************************************************************** #
         # 7 - Assign untagged Buildings to tags #
@@ -131,8 +164,9 @@ def osm2lulc(osmdata, nomenclature, refRaster, lulcRst,
         elif ruleID == 7:
             if nomenclature != "GLOBE_LAND_30":
                 res, tm = num_assign_builds(
-                    _osmdb, osmTableData['points'], osmTableData['polygons'],
-                    workspace, CELLSIZE, epsg, refRaster
+                    conPGSQL if not _osmdb else _osmdb,
+                    osmTableData['points'], osmTableData['polygons'],
+                    workspace, CELLSIZE, epsg, refRaster, apidb=roadsAPI
                 )
             
             else:
@@ -180,10 +214,10 @@ def osm2lulc(osmdata, nomenclature, refRaster, lulcRst,
             array = rst_to_array(raster)
             
             if cls not in arrayRst:
-                arrayRst[cls] = [array.astype(numpy.int16)]
+                arrayRst[cls] = [array.astype(numpy.uint8)]
             
             else:
-                arrayRst[cls].append(array.astype(numpy.int16))
+                arrayRst[cls].append(array.astype(numpy.uint8))
     time_n = datetime.datetime.now().replace(microsecond=0)
     
     # Sum Rasters of each class
@@ -202,28 +236,37 @@ def osm2lulc(osmdata, nomenclature, refRaster, lulcRst,
     time_o = datetime.datetime.now().replace(microsecond=0)
     
     # Apply priority rule
-    __priorities = PRIORITIES[nomenclature]
+    __priorities = PRIORITIES[nomenclature + "_NUMPY"]
     
     for lulcCls in __priorities:
-        if lulcCls not in arrayRst:
+        __lulcCls = 1222 if lulcCls == 98 else 1221 if lulcCls == 99 else \
+            802 if lulcCls == 82 else 801 if lulcCls == 81 else lulcCls
+        if __lulcCls not in arrayRst:
             continue
         else:
-            numpy.place(arrayRst[lulcCls], arrayRst[lulcCls] > 0,
+            numpy.place(arrayRst[__lulcCls], arrayRst[__lulcCls] > 0,
                 lulcCls
             )
     
     for i in range(len(__priorities)):
-        if __priorities[i] not in arrayRst:
+        lulc_i = 1222 if __priorities[i] == 98 else 1221 \
+            if __priorities[i] == 99 else 802 if __priorities[i] == 82 \
+            else 801 if __priorities[i] == 81 else __priorities[i]
+        if lulc_i not in arrayRst:
             continue
         
         else:
             for e in range(i+1, len(__priorities)):
-                if __priorities[e] not in arrayRst:
+                lulc_e = 1222 if __priorities[e] == 98 else 1221 \
+                    if __priorities[e] == 99 else \
+                    802 if __priorities[e] == 82 else 801 \
+                    if __priorities[e] == 81 else __priorities[e]
+                if lulc_e not in arrayRst:
                     continue
                 
                 else:
-                    numpy.place(arrayRst[__priorities[e]],
-                        arrayRst[__priorities[i]] == __priorities[i], 0
+                    numpy.place(arrayRst[lulc_e],
+                        arrayRst[lulc_i] == __priorities[i], 0
                     )
     
     time_p = datetime.datetime.now().replace(microsecond=0)
@@ -231,8 +274,11 @@ def osm2lulc(osmdata, nomenclature, refRaster, lulcRst,
     # Merge all rasters
     startCls = 'None'
     for i in range(len(__priorities)):
-        if __priorities[i] in arrayRst:
-            resultSum = arrayRst[__priorities[i]]
+        lulc_i = 1222 if __priorities[i] == 98 else 1221 \
+            if __priorities[i] == 99 else 802 if __priorities[i] == 82 \
+            else 801 if __priorities[i] == 81 else __priorities[i]
+        if lulc_i in arrayRst:
+            resultSum = arrayRst[lulc_i]
             startCls = i
             break
     
@@ -240,15 +286,18 @@ def osm2lulc(osmdata, nomenclature, refRaster, lulcRst,
         return 'NoResults'
     
     for i in range(startCls + 1, len(__priorities)):
-        if __priorities[i] not in arrayRst:
+        lulc_i = 1222 if __priorities[i] == 98 else 1221 \
+            if __priorities[i] == 99 else 802 if __priorities[i] == 82 \
+            else 801 if __priorities[i] == 81 else __priorities[i]
+        if lulc_i not in arrayRst:
             continue
         
-        resultSum = resultSum + arrayRst[__priorities[i]]
+        resultSum = resultSum + arrayRst[lulc_i]
     
     # Save Result
-    numpy.place(resultSum, resultSum==0, -1)
+    numpy.place(resultSum, resultSum==0, 1)
     array_to_raster(
-        resultSum, lulcRst, refRaster, epsg, gdal.GDT_Int16, noData=-1,
+        resultSum, lulcRst, refRaster, epsg, gdal.GDT_Byte, noData=1,
         gisApi='gdal'
     )
     

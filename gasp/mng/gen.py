@@ -20,7 +20,7 @@ def merge_df(dfs, ignIndex=True):
     result = dfs[0]
     
     for df in dfs[1:]:
-        result = result.append(df, ignore_index=ignIndex, sort=True)
+        result = result.append(df, ignore_index=ignIndex)#, sort=True)
     
     return result
 

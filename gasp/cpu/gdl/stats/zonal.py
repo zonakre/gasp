@@ -13,7 +13,7 @@ def statistics_by_line_feat(lines, raster, statistic, new_field):
     """
     
     from osgeo                 import ogr, gdal
-    from gasp.cpu.gdl          import drv_name
+    from gasp.prop.ff          import drv_name
     from gasp.cpu.gdl.sampling import gdal_point_value_on_raster
     
     # Open feature class

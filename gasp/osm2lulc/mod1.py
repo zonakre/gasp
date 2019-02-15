@@ -2,19 +2,23 @@
 Rule 1 - Selection
 """
 
-def grs_rst(osmdata, polyTbl):
+def grs_rst(osmLink, polyTbl, api='SQLITE'):
     """
     Simple selection, convert result to Raster
     """
     
     import datetime
-    from gasp.fm.sqLite  import sqlq_to_df
-    from gasp.to.shp.grs import sqlite_to_shp
-    from gasp.to.rst.grs import shp_to_raster
+    if api == 'POSTGIS':
+        from gasp.fm.psql    import query_to_df as sqlq_to_df
+        from gasp.to.shp.grs import psql_to_grs as db_to_grs
+    else:
+        from gasp.fm.sqLite  import sqlq_to_df
+        from gasp.to.shp.grs import sqlite_to_shp as db_to_grs
+    from gasp.to.rst.grs     import shp_to_raster
     
     # Get Classes 
     time_a = datetime.datetime.now().replace(microsecond=0)
-    lulcCls = sqlq_to_df(osmdata, (
+    lulcCls = sqlq_to_df(osmLink, (
         "SELECT selection FROM {} "
         "WHERE selection IS NOT NULL "
         "GROUP BY selection"
@@ -28,9 +32,10 @@ def grs_rst(osmdata, polyTbl):
     tk = 1
     for cls in lulcCls:
         time_x = datetime.datetime.now().replace(microsecond=0)
-        grsVect = sqlite_to_shp(
-            osmdata, polyTbl, "rule1_{}".format(str(cls)),
-            where="selection = {}".format(str(cls)), notTable=True
+        grsVect = db_to_grs(
+            osmLink, polyTbl, "rule1_{}".format(str(cls)),
+            where="selection = {}".format(str(cls)), notTable=True,
+            filterByReg=True
         )
         time_y = datetime.datetime.now().replace(microsecond=0)
         
@@ -41,15 +46,15 @@ def grs_rst(osmdata, polyTbl):
         time_z = datetime.datetime.now().replace(microsecond=0)
         
         clsRst[int(cls)] = grsRst
-        timeGasto[tk] = ('import_{}'.format(cls), time_y - time_x)
-        timeGasto[tk+1] = ('torst_{}'.format(cls), time_z - time_y)
+        timeGasto[tk]    = ('import_{}'.format(cls), time_y - time_x)
+        timeGasto[tk+1]  = ('torst_{}'.format(cls), time_z - time_y)
         
         tk += 2
     
     return clsRst, timeGasto
 
 
-def grs_vector(osmdata, polyTable):
+def grs_vector(dbcon, polyTable, apidb='SQLITE'):
     """
     Simple Selection using GRASS GIS
     """
@@ -57,20 +62,27 @@ def grs_vector(osmdata, polyTable):
     import datetime
     from gasp.cpu.grs.mng.genze import dissolve
     from gasp.cpu.grs.mng.tbl   import add_table
-    from gasp.sqLite.i          import count_rows_in_query
-    from gasp.to.shp.grs        import sqlite_to_shp
+    
+    if apidb != 'POSTGIS':
+        from gasp.to.shp.grs    import sqlite_to_shp as db_to_grs
+        from gasp.sqLite.i      import count_rows_in_query as cont_row
+    else:
+        from gasp.to.shp.grs    import psql_to_grs   as db_to_grs
+        from gasp.cpu.psql.i    import get_row_number as cont_row
     
     WHR = "selection IS NOT NULL"
     
     # Check if we have interest data
     time_a = datetime.datetime.now().replace(microsecond=0)
-    N = count_rows_in_query(osmdata, polyTable, where=WHR)
+    N = cont_row(dbcon, polyTable, where=WHR)
     time_b = datetime.datetime.now().replace(microsecond=0)
     
     if not N: return None, {0 : ('count_rows', time_b - time_a)}
     
     # Data to GRASS GIS
-    grsVect = sqlite_to_shp(osmdata, polyTable, "sel_rule", where=WHR)
+    grsVect = db_to_grs(
+        dbcon, polyTable, "sel_rule", where=WHR, filterByReg=True
+    )
     time_c = datetime.datetime.now().replace(microsecond=0)
     
     dissVect = dissolve(
@@ -86,21 +98,25 @@ def grs_vector(osmdata, polyTable):
     }
 
 
-def num_selection(osmdata, polyTbl, folder,
-                  cellsize, srscode, rstTemplate):
+def num_selection(osmcon, polyTbl, folder,
+                  cellsize, srscode, rstTemplate, api='SQLITE'):
     """
     Select and Convert to Raster
     """
     
-    import datetime;            import os
-    from threading              import Thread
-    from gasp.fm.sqLite         import sqlq_to_df
-    from gasp.cpu.gdl.anls.exct import sel_by_attr
-    from gasp.to.rst.gdl        import shp_to_raster
+    import datetime;                import os
+    from threading                  import Thread
+    if api == 'SQLITE':
+        from gasp.fm.sqLite         import sqlq_to_df
+        from gasp.cpu.gdl.anls.exct import sel_by_attr
+    else:
+        from gasp.fm.psql           import query_to_df as sqlq_to_df
+        from gasp.to.shp            import psql_to_shp as sel_by_attr
+    from gasp.to.rst.gdl            import shp_to_raster
     
     # Get classes in data
     time_a = datetime.datetime.now().replace(microsecond=0)
-    classes = sqlq_to_df(osmdata, (
+    classes = sqlq_to_df(osmcon, (
         "SELECT selection FROM {} "
         "WHERE selection IS NOT NULL "
         "GROUP BY selection"
@@ -114,14 +130,21 @@ def num_selection(osmdata, polyTbl, folder,
     SQL_Q = "SELECT {lc} AS cls, geometry FROM {tbl} WHERE selection={lc}"
     def FilterAndExport(CLS, cnt):
         time_x = datetime.datetime.now().replace(microsecond=0)
-        shp = sel_by_attr(
-            osmdata, SQL_Q.format(lc=str(CLS), tbl=polyTbl),
-            os.path.join(folder, 'sel_{}.shp'.format(str(CLS)))
-        )
+        if api == 'SQLITE':
+            shp = sel_by_attr(
+                osmcon, SQL_Q.format(lc=str(CLS), tbl=polyTbl),
+                os.path.join(folder, 'sel_{}.shp'.format(str(CLS)))
+            )
+        else:
+            shp = sel_by_attr(
+                osmcon, SQL_Q.format(lc=str(CLS), tbl=polyTbl),
+                os.path.join(folder, 'sel_{}.shp'.format(str(CLS))),
+                api='pgsql2shp', geom_col="geometry", tableIsQuery=True
+            )
         time_y = datetime.datetime.now().replace(microsecond=0)
         
         rstCls = shp_to_raster(
-            shp, cellsize, -1,
+            shp, cellsize, 0,
             os.path.join(folder, 'sel_{}.tif'.format(str(CLS))),
             srscode, rstTemplate
         )

@@ -25,7 +25,7 @@ def ogr_buffer(geom, radius, out_file, srs=None):
     Accepts files or lists with geom objects as inputs
     """
     
-    from gasp.cpu.gdl         import drv_name
+    from gasp.prop.ff         import drv_name
     from gasp.cpu.gdl.mng.prj import get_sref_from_epsg
     
     # Create output
@@ -303,7 +303,7 @@ def dic_buffer_array_to_shp(arrayBf, outShp, epsg, fields=None):
     
     import os
     from osgeo                import ogr
-    from gasp.cpu.gdl         import drv_name
+    from gasp.prop.ff         import drv_name
     from gasp.cpu.gdl.mng.prj import get_sref_from_epsg
     
     # Get SRS for output

@@ -5,11 +5,6 @@ ArcGIS tools from Analysis Tools > Overlay
 import arcpy
 
 
-def union(lst, out):
-    arcpy.Union_analysis(";".join(lst), out, "ALL", "", "GAPS")
-    return out
-
-
 def geom_contains(containerGeom, otherGeom):
     return containerGeom.contains(otherGeom)
 

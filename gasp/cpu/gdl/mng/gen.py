@@ -41,7 +41,7 @@ def ogr_merge(shp_to_merge, merged_shp, srs=None, fields_to_copy=None):
     from osgeo                import ogr
     from gasp                 import goToList
     from gasp.oss             import get_filename
-    from gasp.cpu.gdl         import drv_name
+    from gasp.prop.ff         import drv_name
     from gasp.prop.feat       import get_geom_type
     from gasp.cpu.gdl.mng.fld import ogr_list_fields_defn
     

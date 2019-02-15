@@ -13,7 +13,7 @@ def ogr_select_by_location(shp, boundary_filter, filtered_output):
     
     import os
     from osgeo                import ogr
-    from gasp.cpu.gdl         import drv_name
+    from gasp.prop.ff         import drv_name
     from gasp.prop.feat       import get_geom_type
     from gasp.cpu.gdl.mng.gen import copy_features
     from gasp.cpu.gdl.mng.fld import ogr_copy_fields

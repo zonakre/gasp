@@ -3,7 +3,7 @@ Google Maps
 """
 
 
-def find_places(inShp, epsg, radius, keyword=None, type=None, output):
+def find_places(inShp, epsg, radius, output, keyword=None, type=None):
     """
     Extract places from Google Maps
     """

@@ -23,6 +23,16 @@ def get_sref_from_epsg(epsg):
     
     return s 
 
+def get_epsg_raster(rst):
+    """
+    Return the EPSG Code of the Spatial Reference System of a Raster
+    """
+    
+    d    = gdal.Open(rst)
+    proj = osr.SpatialReference(wkt=d.GetProjection())
+    
+    return int(proj.GetAttrValue('AUTHORITY',1))
+
 
 def get_trans_param(in_epsg, out_epsg, export_all=None):
     """

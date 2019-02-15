@@ -5,19 +5,23 @@ Rule 5 - Basic buffer
 import os
 from gasp.osm2lulc.var   import DB_SCHEMA
 
-def basic_buffer(osmdata, lineTable, dataFolder):
+def basic_buffer(osmLink, lineTable, dataFolder, apidb='SQLITE'):
     """
     Data from Lines table to Polygons using a basic buffering stratagie
     """
     
     import datetime
-    from gasp.fm.sqLite           import sqlq_to_df
-    from gasp.cpu.gdl.splite.prox import st_buffer
-    from gasp.to.rst.grs          import shp_to_raster
-    from gasp.to.shp.grs          import shp_to_grs
+    if apidb == 'POSTGIS':
+        from gasp.fm.psql             import query_to_df as sqlq_to_df
+        from gasp.cpu.psql.anls.prox  import st_buffer
+    else:
+        from gasp.fm.sqLite           import sqlq_to_df
+        from gasp.cpu.gdl.splite.prox import st_buffer
+    from gasp.to.rst.grs              import shp_to_raster
+    from gasp.to.shp.grs              import shp_to_grs
     
     time_a = datetime.datetime.now().replace(microsecond=0)
-    lulcCls = sqlq_to_df(osmdata, (
+    lulcCls = sqlq_to_df(osmLink, (
         "SELECT basic_buffer FROM {} WHERE basic_buffer IS NOT NULL "
         "GROUP BY basic_buffer"
     ).format(lineTable)).basic_buffer.tolist()
@@ -31,15 +35,18 @@ def basic_buffer(osmdata, lineTable, dataFolder):
         # Run BUFFER Tool
         time_x = datetime.datetime.now().replace(microsecond=0)
         bb_file = st_buffer(
-            osmdata, lineTable, "bf_basic_buffer", "geometry",
-            os.path.join(dataFolder, 'bb_rule5_{}.gml'.format(str(int(cls)))),
+            osmLink, lineTable, "bf_basic_buffer", "geometry",
+            os.path.join(dataFolder, 'bb_rule5_{}.shp'.format(str(int(cls)))),
             whrClause="basic_buffer={}".format(str(int(cls))),
-            outTblIsFile=True, dissolve="ALL"
+            outTblIsFile=True, dissolve="ALL", cols_select="basic_buffer"
         )
         time_y = datetime.datetime.now().replace(microsecond=0)
         
         # Data TO GRASS
-        grsVect = shp_to_grs(bb_file, "bb_{}".format(int(cls)), asCMD=True)
+        grsVect = shp_to_grs(
+            bb_file, "bb_{}".format(int(cls)), asCMD=True,
+            filterByReg=True
+        )
         time_z = datetime.datetime.now().replace(microsecond=0)
         
         # Data to Raster
@@ -59,28 +66,35 @@ def basic_buffer(osmdata, lineTable, dataFolder):
     return clsRst, timeGasto
 
 
-def grs_vect_bbuffer(osmdata, lineTbl):
+def grs_vect_bbuffer(osmdata, lineTbl, api_db='SQLITE'):
     """
     Basic Buffer strategie
     """
     
     import datetime
-    from gasp.sqLite.i          import count_rows_in_query
-    from gasp.to.shp.grs        import sqlite_to_shp
     from gasp.cpu.grs.anls.prox import Buffer
     from gasp.cpu.grs.mng.genze import dissolve
     from gasp.cpu.grs.mng.tbl   import add_table
+    
+    if api_db != 'POSTGIS':
+        from gasp.to.shp.grs    import sqlite_to_shp as db_to_shp
+        from gasp.sqLite.i      import count_rows_in_query as cnt_row
+    else:
+        from gasp.to.shp.grs import psql_to_grs    as db_to_shp
+        from gasp.cpu.psql.i import get_row_number as cnt_row
     
     WHR = "basic_buffer IS NOT NULL"
     
     # Check if we have data
     time_a = datetime.datetime.now().replace(microsecond=0)
-    N = count_rows_in_query(osmdata, lineTbl, where=WHR)
+    N = cnt_row(osmdata, lineTbl, where=WHR)
     time_b = datetime.datetime.now().replace(microsecond=0)
     
     if not N: return None, {0 : ('count_rows_roads', time_b - time_a)}
     
-    grsVect = sqlite_to_shp(osmdata, lineTbl, "bb_lnh", where=WHR)
+    grsVect = db_to_shp(
+        osmdata, lineTbl, "bb_lnh", where=WHR, filterByReg=True
+    )
     time_c = datetime.datetime.now().replace(microsecond=0)
     
     grsBuf  = Buffer(grsVect, "line", "bf_basic_buffer", "bb_poly", cmdAS=True)
@@ -98,20 +112,25 @@ def grs_vect_bbuffer(osmdata, lineTbl):
     }
 
 
-def num_base_buffer(osmdata, lineTbl, folder, cells, srscode, rtemplate):
+def num_base_buffer(osmLink, lineTbl, folder, cells, srscode, rtemplate,
+                    api='SQLITE'):
     """
     Data from Lines to Polygons
     """
     
     import datetime
     from threading                import Thread
-    from gasp.fm.sqLite           import sqlq_to_df
-    from gasp.cpu.gdl.splite.prox import st_buffer
+    if api=='SQLITE':
+        from gasp.fm.sqLite           import sqlq_to_df
+        from gasp.cpu.gdl.splite.prox import st_buffer
+    else:
+        from gasp.fm.psql import query_to_df as sqlq_to_df
+        from gasp.cpu.psql.anls.prox import st_buffer
     from gasp.to.rst.gdl          import shp_to_raster
     
     # Get LULC Classes to be selected
     time_a = datetime.datetime.now().replace(microsecond=0)
-    lulcCls = sqlq_to_df(osmdata, (
+    lulcCls = sqlq_to_df(osmLink, (
         "SELECT basic_buffer FROM {} WHERE basic_buffer IS NOT NULL "
         "GROUP BY basic_buffer"
     ).format(lineTbl)).basic_buffer.tolist()
@@ -125,16 +144,16 @@ def num_base_buffer(osmdata, lineTbl, folder, cells, srscode, rtemplate):
         # Run BUFFER Tool
         time_x = datetime.datetime.now().replace(microsecond=0)
         bb_file = st_buffer(
-            osmdata, lineTbl, "bf_basic_buffer", "geometry",
-            os.path.join(folder, 'bb_rule5_{}.gml'.format(str(int(CLS)))),
+            osmLink, lineTbl, "bf_basic_buffer", "geometry",
+            os.path.join(folder, 'bb_rule5_{}.shp'.format(str(int(CLS)))),
             whrClause="basic_buffer={}".format(str(int(CLS))),
-            outTblIsFile=True, dissolve=None
+            outTblIsFile=True, dissolve=None, cols_select="basic_buffer"
         )
         time_y = datetime.datetime.now().replace(microsecond=0)
         
         # To raster
         rstCls = shp_to_raster(
-            bb_file, cells, -1,
+            bb_file, cells, 0,
             os.path.join(folder, 'rst_bbfr_{}.tif'.format(CLS)),
             srscode, rtemplate
         )

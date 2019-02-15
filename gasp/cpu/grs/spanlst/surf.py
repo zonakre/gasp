@@ -96,3 +96,108 @@ def ridw(inRst, outRst, numberPoints=None):
     
     idw()
 
+
+def bspline(inPnt, attrCol, rstOutput, lyrN=1, asCMD=None):
+    """
+    v.surf.bspline performs a bilinear/bicubic spline interpolation
+    with Tykhonov regularization. The input is a 2D or 3D vector points
+    map. Values to interpolate can be the z values of 3D points or the values
+    in a user-specified attribute column in a 2D or 3D vector map.
+    Output can be a raster (raster_output) or vector (output) map.
+    Optionally, a "sparse point" vector map can be input which indicates
+    the location of output vector points.
+    """
+    
+    # Methods Available: bilinear; bicubic
+    
+    if not asCMD:
+        t = Module(
+            "v.surf.bspline", input=inPnt, layer=lyrN, column=attrCol,
+            raster_output=rstOutput, method="bilinear", overwrite=True,
+            quiet=True, run_=False
+        )
+        
+        t()
+    
+    else:
+        from gasp import exec_cmd
+        
+        tcmd = (
+            "v.surf.bspline input={} layer={} column={} raster_output={} "
+            "method=bilinear --overwrite --quiet"
+        ).format(inPnt, lyrN, attrCol, rstOutput)
+        
+        rcmd = exec_cmd(tcmd)
+    
+    return rstOutput
+
+def surfrst(inPnt, attrCol, output, lyrN=1, ascmd=None):
+    """
+    v.surf.rst - Performs surface interpolation from vector points map by
+    splines. Spatial approximation and topographic analysis from given point or
+    isoline data in vector format to floating point raster format using
+    regularized spline with tension.
+    """
+    
+    if not ascmd:
+        t = Module(
+            "v.surf.rst", input=inPnt, layer=lyrN, zcolumn=attrCol,
+            elevation=output, overwrite=True, quiet=True, run_=False
+        )
+        
+        t()
+    
+    else:
+        from gasp import exec_cmd
+        
+        tcmd = (
+            "v.surf.rst input={} layer={} zcolumn={} "
+            "elevation={} --overwrite --quiet"
+        ).format(inPnt, lyrN, attrCol, output)
+        
+        rcmd = exec_cmd(tcmd)
+    
+    return output
+
+
+def surfcontour(inContour, outDEM, ascmd=None):
+    """
+    r.surf.contour - Generates surface raster map from rasterized contours.
+    
+    r.surf.contour creates a raster elevation map from a rasterized contour map.
+    Elevation values are determined using procedures similar to a manual methods.
+    To determine the elevation of a point on a contour map, an individual
+    might interpolate its value from those of the two nearest contour lines
+    (uphill and downhill).
+    
+    r.surf.contour works in a similar way. Initially, a vector map of the
+    contour lines is made with the elevation of each line as an attribute.
+    When the program v.to.rast is run on the vector map, continuous "lines"
+    of rasters containing the contour line values will be the input for
+    r.surf.contour. For each cell in the input map, either the cell is a
+    contour line cell (which is given that value), or a flood fill is generated
+    from that spot until the fill comes to two unique values. So the
+    r.surf.contour algorithm linearly interpolates between contour lines.
+    The flood fill is not allowed to cross over the rasterized contour lines,
+    thus ensuring that an uphill and downhill contour value will be the two
+    values chosen. r.surf.contour interpolates from the uphill and downhill
+    values by the true distance.
+    """
+    
+    if not ascmd:
+        t = Module(
+            "r.surf.contour", input=inContour, output=outDEM,
+            run_=False, quiet=True, overwrite=True
+        )
+        
+        t()
+    
+    else:
+        from gasp import exec_cmd
+        
+        tcmd = "r.surf.contour input={} output={}".format(inContour, outDEM)
+        
+        rcmd = exec_cmd(tcmd)
+    
+    return outDEM
+

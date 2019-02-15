@@ -230,7 +230,8 @@ def points_to_boundary(pntShp, outBound, distMeters):
     
     from osgeo                import ogr
     from gasp.oss             import get_filename
-    from gasp.cpu.gdl         import drv_name, create_point
+    from gasp.prop.ff         import drv_name
+    from gasp.cpu.gdl         import create_point
     from gasp.cpu.gdl.mng.prj import get_shp_sref
     
     SRS = get_shp_sref(pntShp)

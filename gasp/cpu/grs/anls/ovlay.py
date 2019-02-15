@@ -3,33 +3,6 @@ Overlay operations with GRASS GIS
 """
 
 
-def union(aShp, bShp, o, ascmd=None):
-    """
-    Union using GRASS GIS
-    """
-    
-    if not ascmd:
-        from grass.pygrass.modules import Module
-    
-        un = Module(
-            "v.overlay", ainput=aShp, atype="area",
-            binput=bShp, btype="area", operator="or",
-            output=o, overwrite=True, run_=False, quiet=True
-        )
-    
-        un()
-    
-    else:
-        from gasp import exec_cmd
-        
-        outcmd = exec_cmd((
-            "v.overlay ainput={} atype=area binput={} btype=area "
-            "operator=or output={} --overwrite --quiet"
-        ).format(aShp, bShp, o))
-    
-    return o
-
-
 def erase(inShp, erase_feat, out, asCMD=None):
     """
     Difference operations between vectors
@@ -56,31 +29,6 @@ def erase(inShp, erase_feat, out, asCMD=None):
         ).format(inShp, erase_feat, out))
     
     return out
-
-
-def vclip(inShp, clipShp, outShp, asCMD=None):
-    """
-    Extracts features of input map which overlay features of clip map.
-    """
-    
-    if not asCMD:
-        from grass.pygrass.modules import Module
-        
-        vclip = Module(
-            "v.clip", input=inShp, clip=clipShp,
-            output=outShp, overwrite=True, run_=False
-        )
-    
-    else:
-        from gasp import exec_cmd
-        
-        rcmd = exec_cmd(
-            "v.clip input={} clip={} output={} --overwrite".format(
-                inShp, clipShp, outShp
-            )
-        )
-    
-    return outShp
 
 
 def intersection(aentrada, bentrada, saida):

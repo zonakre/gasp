@@ -117,3 +117,25 @@ def reset_table(table, new_flds, values2write, whr_fields=None):
                 whr_fields[f]
         )
 
+
+def rename_col(tbl, oldCol, newCol, as_cmd=None):
+    """
+    Renames a column in the attribute table connected to a given vector map.
+    """
+    
+    if not as_cmd:
+        func = Module(
+            "v.db.renamecolumn", map=tbl, column="{},{}".format(oldCol, newCol),
+            quiet=True, run_=False
+        )
+        
+        func()
+    else:
+        from gasp import exec_cmd
+        
+        rcmd = exec_cmd(
+            "v.db.renamecolumn map={} layer=1 column={},{}".format(
+                tbl, oldCol, newCol
+            )
+        )
+

@@ -15,11 +15,9 @@ def intersect_in_same_table(conParam, table, geomA, geomB, outtable,
     from gasp.cpu.psql        import connection
     from gasp.cpu.psql.mng.qw import ntbl_by_query
     
-    conn = connection(conParam)
-    
     COLS = goToList(colsSel)
     
-    ntbl_by_query(
+    return ntbl_by_query(
         conParam, outtable,
         ("SELECT {cls}, CASE WHEN interse IS TRUE THEN 1 ELSE 0 END AS {intF} "
          "{intgeomF}FROM ("

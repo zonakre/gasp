@@ -14,7 +14,7 @@ def connect_lines_to_near_lines(inLines, nearLines, outLines,
 
     import os
     from gasp.oss       import get_filename
-    from gasp.cpu.gdl   import drv_name
+    from gasp.prop.ff   import drv_name
     from gasp.prop.feat import get_geom_attr
 
     # Check Geometries
@@ -121,7 +121,7 @@ def connect_points_to_near_line_vertex(inPnt, nearLines, outLines,
     """
 
     import os
-    from gasp.cpu.gdl   import drv_name
+    from gasp.prop.ff   import drv_name
     from gasp.prop.feat import get_geom_type
 
     # Check Geometries
@@ -219,7 +219,7 @@ def connect_points_to_near_line(inPnt, nearLines, outLines,
     import os
     import numpy as np
     from shapely.geometry import LineString, Point
-    from gasp.cpu.gdl     import drv_name
+    from gasp.prop.ff     import drv_name
     from gasp.prop.feat   import get_geom_type
 
     # Check Geometries

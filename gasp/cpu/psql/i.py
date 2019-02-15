@@ -109,14 +109,16 @@ def check_last_id(lnk, pk, table):
         return max(f)
 
 
-def get_row_number(conP, table):
+def get_row_number(conP, table, where=None):
     """
     Return the number of rows in a PostgreSQL table
     """
     
     from gasp.fm.psql import query_to_df
     
-    d = query_to_df(conP, "SELECT COUNT(*) AS nrows FROM {}".format(table))
+    d = query_to_df(conP, "SELECT COUNT(*) AS nrows FROM {}{}".format(
+        table, "" if not where else " WHERE {}".format(where)
+    ))
     
     return int(d.iloc[0].nrows)
 

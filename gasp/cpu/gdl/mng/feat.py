@@ -14,7 +14,7 @@ def polyline_to_points(inShp, outShp, attr=None, epsg=None):
     
     import os
     from osgeo                import ogr
-    from gasp.cpu.gdl         import drv_name
+    from gasp.prop.ff         import drv_name
     from gasp.cpu.gdl.mng.fld import ogr_copy_fields
     
     # Open Input
@@ -114,7 +114,7 @@ def polylines_from_points(points, polylines, POLYLINE_COLUMN,
     
     import os
     from osgeo                import ogr
-    from gasp.cpu.gdl         import drv_name
+    from gasp.prop.ff         import drv_name
     from gasp.cpu.gdl.mng.prj import ogr_def_proj
     from gasp.cpu.gdl.mng.fld import ogr_list_fields_defn
     from gasp.cpu.gdl.mng.fld import add_fields
@@ -233,7 +233,7 @@ def feat_to_pnt(inShp, outPnt, epsg=None):
     
     import os
     from osgeo                import ogr
-    from gasp.cpu.gdl         import drv_name
+    from gasp.prop.ff         import drv_name
     from gasp.cpu.gdl.mng.fld import ogr_copy_fields
     from gasp.cpu.gdl.mng.fld import lst_fld
     
@@ -289,77 +289,4 @@ def feat_to_pnt(inShp, outPnt, epsg=None):
     polyData.Destroy()
     
     return outPnt
-
-
-def feat_to_newshp(inShp, outFolder, epsg=None):
-    """
-    Export all features in inShp to a new File
-    """
-    
-    import os
-    
-    from gasp.cpu.gdl         import drv_name
-    from gasp.prop.feat       import get_geom_type
-    from gasp.cpu.gdl.mng.fld import lst_fld
-    from gasp.cpu.gdl.mng.fld import ogr_copy_fields
-    from gasp.oss             import get_fileformat, get_filename
-    
-    inDt = ogr.GetDriverByName(
-        drv_name(inShp)).Open(inShp)
-    
-    lyr = inDt.GetLayer()
-    
-    # Get SRS for the output
-    if not epsg:
-        from gasp.cpu.gdl.mng.prj import get_shp_sref
-        srs = get_shp_sref(lyr)
-    
-    else:
-        from gasp.cpu.gdl.mng.prj import get_sref_from_epsg
-        srs = get_sref_from_epsg(epsg)
-    
-    # Get fields name
-    fields = lst_fld(lyr)
-    
-    # Get Geometry type
-    geomCls = get_geom_type(inShp, gisApi='ogr', name=None, py_cls=True)
-    
-    # Read features and create a new file for each feature
-    for feat in lyr:
-        # Create output
-        newShp = os.path.join(outFolder, "{}_{}{}".format(
-            get_filename(inShp), str(feat.GetFID()),
-            get_fileformat(inShp)
-        ))
-        
-        newData = ogr.GetDriverByName(
-            drv_name(newShp)).CreateDataSource(newShp)
-        
-        newLyr = newData.CreateLayer(
-            get_filename(newShp), srs, geom_type=geomCls
-        )
-        
-        # Copy fields from input to output
-        ogr_copy_fields(lyr, newLyr)
-        
-        newLyrDefn = newLyr.GetLayerDefn()
-        
-        # Create new feature
-        newFeat = ogr.Feature(newLyrDefn)
-        
-        # Copy geometry
-        geom = feat.GetGeometryRef()
-        newFeat.SetGeometry(geom)
-        
-        # Set fields attributes
-        for fld in fields:
-            newFeat.SetField(fld, feat.GetField(fld))
-        
-        # Save feature
-        newLyr.CreateFeature(newFeat)
-        
-        newFeat.Destroy()
-        
-        del newLyr
-        newData.Destroy()
 

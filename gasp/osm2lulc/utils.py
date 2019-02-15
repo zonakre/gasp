@@ -15,6 +15,26 @@ def osm_to_sqdb(osmXml, osmSQLITE):
         osmXml, osmSQLITE, gisApi='ogr', supportForSpatialLite=True)
 
 
+def osm_to_pgsql(osmXml, conPGSQL):
+    """
+    Use GDAL to import osmfile into PostGIS database
+    """
+    
+    from gasp import exec_cmd
+    
+    cmd = (
+        "ogr2ogr -f PostgreSQL \"PG:dbname='{}' host='{}' port='{}' "
+        "user='{}' password='{}'\" {} -lco COLUM_TYPES=other_tags=hstore"
+    ).format(
+        conPGSQL["DATABASE"], conPGSQL["HOST"], conPGSQL["PORT"],
+        conPGSQL["USER"], conPGSQL["PASSWORD"], osmXml
+    )
+    
+    cmdout = exec_cmd(cmd)
+    
+    return conPGSQL["DATABASE"]
+
+
 def record_time_consumed(timeData, outXls):
     """
     Record the time consumed by a OSM2LULC procedure version
@@ -49,6 +69,9 @@ def record_time_consumed(timeData, outXls):
             taskKeys = timeData[i][2].keys()
             taskKeys.sort()
             for task in taskKeys:
+                if not timeData[i][2][task]:
+                    continue
+                
                 timeInsideRule.append({
                     'rule' : timeData[i][0],
                     'task' : timeData[i][2][task][0],
@@ -64,45 +87,69 @@ def record_time_consumed(timeData, outXls):
     return df_to_xls(dfs, outXls, sheetsName=['general', 'detailed'])
 
 
-def osm_project(osmSQLITE, srs_epsg):
+def osm_project(osmDb, srs_epsg, api='SQLITE'):
     """
     Reproject OSMDATA to a specific Spatial Reference System
     """
     
-    from gasp.cpu.gdl.mng.prj import ogr2ogr_transform_inside_sqlite
+    if api != 'POSTGIS':
+        from gasp.cpu.gdl.mng.prj import ogr2ogr_transform_inside_sqlite as proj
+    else:
+        from gasp.cpu.psql.mng.qw import ntbl_by_query as proj
+        from gasp.cpu.psql.mng    import add_idx_to_geom
     from .var import osmTableData, GEOM_AREA
     
     osmtables = {}
+    
+    GEOM_COL = "geometry" if api != "POSTGIS" else "wkb_geometry"
     
     for table in osmTableData:
         if table == "polygons":
             Q = (
                 "SELECT building, selection, buildings, area_upper, t_area_upper, "
-                "area_lower, t_area_lower, geometry, "
-                "ST_Area(ST_Transform(geometry, {})) AS {geom_area} "
-                "FROM {} WHERE selection IS NOT NULL OR "
+                "area_lower, t_area_lower, {geomColTrans} AS geometry, "
+                "ST_Area(ST_Transform({geomCol}, {epsg})) AS {geom_area} "
+                "FROM {t} WHERE selection IS NOT NULL OR "
                 "buildings IS NOT NULL OR area_upper IS NOT NULL OR "
                 "area_lower IS NOT NULL"
-            ).format(srs_epsg, osmTableData[table], geom_area=GEOM_AREA)
+            ).format(
+                geomColTrans=GEOM_COL if api != 'POSTGIS' else \
+                    "ST_Transform({}, {})".format(GEOM_COL, srs_epsg),
+                geomCol=GEOM_COL, epsg=srs_epsg,
+                t=osmTableData[table], geom_area=GEOM_AREA)
         
         elif table == 'lines':
             Q = (
-                "SELECT roads, bf_roads, basic_buffer, bf_basic_buffer, "
-                "geometry FROM {} "
+                "SELECT{} roads, bf_roads, basic_buffer, bf_basic_buffer, "
+                "{} AS geometry FROM {} "
                 "WHERE roads IS NOT NULL OR basic_buffer IS NOT NULL"
-            ).format(osmTableData[table])
+            ).format(
+                "" if api != 'POSTGIS' else " row_number() OVER(ORDER BY roads) AS gid,",
+                GEOM_COL if api != 'POSTGIS' else \
+                    "ST_Transform({}, {})".format(GEOM_COL, srs_epsg),
+                osmTableData[table]
+            )
         
         elif table == 'points':
             Q = (
-                "SELECT buildings, geometry FROM {} "
+                "SELECT buildings, {} AS geometry FROM {} "
                 "WHERE buildings IS NOT NULL"
-            ).format(osmTableData[table])
+            ).format(
+                GEOM_COL if api != 'POSTGIS' else \
+                    "ST_Transform({}, {})".format(GEOM_COL, srs_epsg),
+                osmTableData[table]
+            )
         
-        ogr2ogr_transform_inside_sqlite(
-            osmSQLITE, table, 4326, srs_epsg,
-            '{}_{}'.format(table, str(srs_epsg)),
-            sql=Q
-        )
+        if api != 'POSTGIS':
+            proj(
+                osmDb, table, 4326, srs_epsg,
+                '{}_{}'.format(table, str(srs_epsg)),
+                sql=Q
+            )
+        else:
+            proj(osmDb, '{}_{}'.format(table, str(srs_epsg)), Q)
+            
+            add_idx_to_geom(osmDb, '{}_{}'.format(table, str(srs_epsg)), "geometry")
         
         osmtables[table] = '{}_{}'.format(table, str(srs_epsg))
     
@@ -212,12 +259,15 @@ def get_osm_feat_by_rule(nomenclature):
     return sqlq_to_df(PROCEDURE_DB, Q)
 
 
-def add_lulc_to_osmfeat(osmdb, osmTbl, nomenclature):
+def add_lulc_to_osmfeat(osmdb, osmTbl, nomenclature, api='SQLITE'):
     """
     Add LULC Classes in OSM Data Tables
     """
     
-    from gasp.sqLite.mng.qw import exec_write_query
+    if api != 'POSTGIS':
+        from gasp.sqLite.mng.qw import exec_write_query
+    else:
+        from gasp.cpu.psql.mng.qw import exec_write_q as exec_write_query
     from gasp.osm2lulc.var  import DB_SCHEMA
     
     KEY_COL   = DB_SCHEMA["OSM_FEATURES"]["OSM_KEY"]
@@ -227,7 +277,7 @@ def add_lulc_to_osmfeat(osmdb, osmTbl, nomenclature):
     
     osmFeaturesDf = get_osm_feat_by_rule(nomenclature)
     
-    osmFeaturesDf[VALUE_COL] = osmFeaturesDf[KEY_COL] + "='" + \
+    osmFeaturesDf.loc[:, VALUE_COL] = osmFeaturesDf[KEY_COL] + "='" + \
         osmFeaturesDf[VALUE_COL] + "'"
     
     Q = []
@@ -253,6 +303,8 @@ def add_lulc_to_osmfeat(osmdb, osmTbl, nomenclature):
             OSM_TABLE  = 'lines'
             BUFFER_COL = DB_SCHEMA[nomenclature]["RULES_FIELDS"]["BUFFER"]
             AREA_COL   = None
+        
+        filterDf.loc[:, VALUE_COL] = osmTbl[OSM_TABLE] + "." + filterDf[VALUE_COL]
         
         Q.append(
             "ALTER TABLE {} ADD COLUMN {} integer".format(

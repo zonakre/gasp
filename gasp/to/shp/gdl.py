@@ -23,7 +23,8 @@ def array_to_shp(array_like, outFile, x='x', y='y', epsg=None):
     
     import os
     from gasp                 import unicode_to_str
-    from gasp.cpu.gdl         import drv_name, create_point
+    from gasp.prop.ff         import drv_name
+    from gasp.cpu.gdl         import create_point
     from gasp.cpu.gdl.mng.prj import get_sref_from_epsg
     from gasp.cpu.gdl.mng.fld import map_pyType_fldCode
     from gasp.oss             import get_filename

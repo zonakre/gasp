@@ -1,11 +1,11 @@
 """
-Rule 7
+Rule 6
 """
 
 import os
 from gasp.osm2lulc.var   import DB_SCHEMA
 
-def rst_pnt_to_build(osmdb, pntTable, polyTable):
+def rst_pnt_to_build(osmLink, pntTable, polyTable, api_db='SQLITE'):
     """
     Replace buildings with tag yes using the info in the Points Layer
     
@@ -13,55 +13,56 @@ def rst_pnt_to_build(osmdb, pntTable, polyTable):
     """
     
     import datetime
-    from gasp.fm.sqLite            import sqlq_to_df
-    from gasp.sqLite.i             import count_rows_in_query
-    from gasp.cpu.gdl.splite.ovlay import intersect_point_with_polygon
-    from gasp.cpu.gdl.splite.ovlay import disjoint_polygons_rel_points
-    from gasp.to.rst.grs           import shp_to_raster
-    from gasp.to.shp.grs           import sqlite_to_shp
+    if api_db == 'POSTGIS':
+        from gasp.cpu.psql.i import get_row_number as cnt_row
+        from gasp.fm.psql    import query_to_df as sqlq_to_df
+        from gasp.to.shp.grs import psql_to_grs as db_to_shp
+    else:
+        from gasp.fm.sqLite  import sqlq_to_df
+        from gasp.to.shp.grs import sqlite_to_shp as db_to_shp
+        from gasp.sqLite.i   import count_rows_in_query as cnt_row
+    from gasp.anls.ovlay     import sgbd_get_feat_within
+    from gasp.anls.ovlay     import sgbd_get_feat_not_within
+    from gasp.to.rst.grs     import shp_to_raster
     
     time_a = datetime.datetime.now().replace(microsecond=0)
-    intersect_point_with_polygon(
-        osmdb,
-        "pnt_buildings", "pnt_geom",
-        "poly_buildings", "poly_geom",
-        "new_buildings",
-        "pnt_build AS cls",
-        "poly_geom AS geometry",
-        ("(SELECT buildings AS pnt_build, geometry AS pnt_geom "
-         "FROM {} WHERE buildings IS NOT NULL) AS pnt_buildings"
-        ).format(pntTable),
-        ("(SELECT buildings AS poly_build, geometry AS poly_geom "
-         "FROM {} WHERE buildings IS NOT NULL) AS poly_buildings"
-        ).format(polyTable),
-        outTblIsFile=None
+    new_build = sgbd_get_feat_within(
+        osmLink, (
+            "(SELECT buildings AS pnt_build, geometry AS pnt_geom "
+            "FROM {} WHERE buildings IS NOT NULL)"
+        ).format(pntTable), "pnt_geom", (
+            "(SELECT buildings AS poly_build, geometry AS poly_geom "
+            "FROM {} WHERE buildings IS NOT NULL)"
+        ).format(polyTable), "poly_geom", "new_buildings",
+        inTblCols="pnt_build AS cls", withinCols="poly_geom AS geometry",
+        outTblIsFile=None,
+        apiToUse="OGR_SPATIALITE" if api_db != "POSTGIS" else api_db
     )
     time_b = datetime.datetime.now().replace(microsecond=0)
     
-    disjoint_polygons_rel_points(
-        osmdb,
-        "pnt_buildings", "pnt_geom",
-        "poly_buildings", "poly_geom",
-        "yes_builds",
-        "poly_geom AS geometry, 11 AS cls",
-        ("(SELECT buildings AS pnt_build, geometry AS pnt_geom "
-         "FROM {} WHERE buildings IS NOT NULL) AS pnt_buildings"
-        ).format(pntTable),
-        ("(SELECT buildings AS poly_build, geometry AS poly_geom "
-         "FROM {} WHERE buildings IS NOT NULL) AS poly_buildings"
-        ).format(polyTable),
-        outTblIsFile=None
+    yes_build = sgbd_get_feat_not_within(
+        osmLink, (
+            "(SELECT buildings AS poly_build, geometry AS poly_geom "
+            "FROM {} WHERE buildings IS NOT NULL)"
+        ).format(polyTable), "poly_geom", (
+            "(SELECT buildings AS pnt_build, geometry AS pnt_geom "
+            "FROM {} WHERE buildings IS NOT NULL)"
+        ).format(pntTable), "pnt_geom", "yes_builds",
+        inTblCols="poly_geom AS geometry, 11 AS cls",
+        outTblIsFile=None,
+        apiToUse="OGR_SPATIALITE" if api_db != "POSTGIS" else api_db
     )
     time_c = datetime.datetime.now().replace(microsecond=0)
     
     resLayers = {}
-    N11 = count_rows_in_query(osmdb, "yes_builds")
+    N11 = cnt_row(osmLink, yes_build)
     time_d = datetime.datetime.now().replace(microsecond=0)
     
     if N11:
         # Data to GRASS GIS
-        grsBuild11 = sqlite_to_shp(
-            osmdb, "yes_builds", "yes_builds", notTable=True)
+        grsBuild11 = db_to_shp(
+            osmLink, yes_build, "yes_builds", notTable=True, filterByReg=True
+        )
         time_f = datetime.datetime.now().replace(microsecond=0)
         
         # To raster
@@ -75,7 +76,8 @@ def rst_pnt_to_build(osmdb, pntTable, polyTable):
     
     # Add data into GRASS GIS
     lulcCls = sqlq_to_df(
-        osmdb, "SELECT cls FROM new_buildings GROUP BY cls").cls.tolist()
+        osmLink, "SELECT cls FROM {} GROUP BY cls".format(new_build)
+    ).cls.tolist()
     
     timeGasto = {
         0 : ('intersect', time_b - time_a),
@@ -87,9 +89,9 @@ def rst_pnt_to_build(osmdb, pntTable, polyTable):
     tk = 5
     for cls in lulcCls:
         time_x = datetime.datetime.now().replace(microsecond=0)
-        shp = sqlite_to_shp(
-            osmdb, "new_buildings", "nbuild_{}".format(str(cls)),
-            "cls = {}".format(cls), notTable=True
+        shp = db_to_shp(
+            osmLink, new_build, "nbuild_{}".format(str(cls)),
+            "cls = {}".format(cls), notTable=True, filterByReg=True
         )
         time_y = datetime.datetime.now().replace(microsecond=0)
         
@@ -112,7 +114,7 @@ def rst_pnt_to_build(osmdb, pntTable, polyTable):
     return resLayers, timeGasto
 
 
-def vector_assign_pntags_to_build(osmdb, pntTable, polyTable):
+def vector_assign_pntags_to_build(osmdb, pntTable, polyTable, apidb='SQLITE'):
     """
     Replace buildings with tag yes using the info in the Points Layer
     
@@ -120,55 +122,54 @@ def vector_assign_pntags_to_build(osmdb, pntTable, polyTable):
     """
     
     import datetime
-    from gasp.sqLite.i             import count_rows_in_query
-    from gasp.cpu.gdl.splite.ovlay import intersect_point_with_polygon
-    from gasp.cpu.gdl.splite.ovlay import disjoint_polygons_rel_points
-    from gasp.cpu.grs.mng.genze    import dissolve
-    from gasp.to.shp.grs           import sqlite_to_shp
-    from gasp.cpu.grs.mng.tbl      import add_table
+    if apidb != "POSTGIS":
+        from gasp.sqLite.i      import count_rows_in_query as cnt_row
+        from gasp.to.shp.grs    import sqlite_to_shp as db_to_shp
+    else:
+        from gasp.cpu.psql.i    import get_row_number as cnt_row
+        from gasp.to.shp.grs    import psql_to_grs as db_to_shp
+    from gasp.anls.ovlay        import sgbd_get_feat_within
+    from gasp.anls.ovlay        import sgbd_get_feat_not_within
+    from gasp.cpu.grs.mng.genze import dissolve
+    
+    from gasp.cpu.grs.mng.tbl   import add_table
     
     time_a = datetime.datetime.now().replace(microsecond=0)
-    intersect_point_with_polygon(
-        osmdb,
-        "pnt_buildings", "pnt_geom",
-        "poly_buildings", "poly_geom",
-        'new_buildings',
-        "pnt_build AS cls",
-        "poly_geom AS geometry",
-        ("(SELECT buildings AS pnt_build, geometry AS pnt_geom "
-         "FROM {} WHERE buildings IS NOT NULL) AS pnt_buildings"
-        ).format(pntTable),
-        ("(SELECT buildings AS poly_build, geometry AS poly_geom "
-         "FROM {} WHERE buildings IS NOT NULL) AS poly_buildings"
-        ).format(polyTable),
-        outTblIsFile=None
+    new_build = sgbd_get_feat_within(
+        osmdb, (
+            "(SELECT buildings AS pnt_build, geometry AS pnt_geom "
+            "FROM {} WHERE buildings IS NOT NULL)"
+        ).format(pntTable), "pnt_geom", (
+            "(SELECT buildings AS poly_build, geometry AS poly_geom "
+            "FROM {} WHERE buildings IS NOT NULL)"
+        ).format(polyTable), "poly_geom", "new_buildings",
+        inTblCols="pnt_build AS cls", withinCols="poly_geom AS geometry",
+        outTblIsFile=None,
+        apiToUse="OGR_SPATIALITE" if apidb != "POSTGIS" else apidb
     )
     time_b = datetime.datetime.now().replace(microsecond=0)
     
-    disjoint_polygons_rel_points(
-        osmdb,
-        "pnt_buildings", "pnt_geom",
-        "poly_buildings", "poly_geom",
-        "yes_builds",
-        "poly_geom AS geometry, 11 AS cls",
-        ("(SELECT buildings AS pnt_build, geometry AS pnt_geom "
-         "FROM {} WHERE buildings IS NOT NULL) AS pnt_buildings"
-        ).format(pntTable),
-        ("(SELECT buildings AS poly_build, geometry AS poly_geom "
-         "FROM {} WHERE buildings IS NOT NULL) AS poly_buildings"
-        ).format(polyTable),
-        outTblIsFile=None
+    yes_build = sgbd_get_feat_not_within(
+        osmdb, (
+            "(SELECT buildings AS poly_build, geometry AS poly_geom "
+            "FROM {} WHERE buildings IS NOT NULL)"
+        ).format(polyTable), "poly_geom", (
+            "(SELECT buildings AS pnt_build, geometry AS pnt_geom "
+            "FROM {} WHERE buildings IS NOT NULL)"
+        ).format(pntTable), "pnt_geom", "yes_builds",
+        inTblCols="poly_geom AS geometry, 11 AS cls", outTblIsFile=None,
+        apiToUse="OGR_SPATIALITE" if apidb != "POSTGIS" else apidb
     )
     time_c = datetime.datetime.now().replace(microsecond=0)
     
-    N12 = count_rows_in_query(osmdb, "new_buildings")
+    N12 = cnt_row(osmdb, new_build)
     time_d = datetime.datetime.now().replace(microsecond=0)
-    N11 = count_rows_in_query(osmdb, "yes_builds")
+    N11 = cnt_row(osmdb, yes_build)
     time_e = datetime.datetime.now().replace(microsecond=0)
     
     if N11:
         # Add data into grasss
-        grsBuild11 = sqlite_to_shp(osmdb, "yes_builds", "yes_builds")
+        grsBuild11 = db_to_shp(osmdb, yes_build, "yes_builds", filterByReg=True)
         time_f = datetime.datetime.now().replace(microsecond=0)
         
         # Dissolve
@@ -185,8 +186,7 @@ def vector_assign_pntags_to_build(osmdb, pntTable, polyTable):
     
     if N12:
         # Add data into GRASS GIS
-        grsBuild12 = sqlite_to_shp(
-            osmdb, "new_buildings", "pnt_build")
+        grsBuild12 = db_to_shp(osmdb, new_build, "pnt_build", filterByReg=True)
         
         time_h = datetime.datetime.now().replace(microsecond=0)
         
@@ -216,7 +216,8 @@ def vector_assign_pntags_to_build(osmdb, pntTable, polyTable):
     }
 
 
-def num_assign_builds(osmsq, pntTbl, polTbl, folder, cells, srscode, rtemplate):
+def num_assign_builds(osmLink, pntTbl, polTbl, folder, cells, srscode, rstT,
+                      apidb='SQLITE'):
     """
     Replace buildings with tag yes using the info in the Points Layer
     
@@ -224,44 +225,43 @@ def num_assign_builds(osmsq, pntTbl, polTbl, folder, cells, srscode, rtemplate):
     """
     
     import datetime
-    from threading                 import Thread
-    from gasp.fm.sqLite            import sqlq_to_df
-    from gasp.cpu.gdl.splite.ovlay import intersect_point_with_polygon
-    from gasp.cpu.gdl.splite.ovlay import disjoint_polygons_rel_points
-    from gasp.to.rst.gdl           import shp_to_raster
-    from gasp.cpu.gdl.anls.exct    import sel_by_attr
+    from threading                  import Thread
+    if apidb == 'SQLITE':
+        from gasp.fm.sqLite         import sqlq_to_df
+        from gasp.cpu.gdl.anls.exct import sel_by_attr
+    else:
+        from gasp.fm.psql           import query_to_df as sqlq_to_df
+        from gasp.to.shp            import psql_to_shp as sel_by_attr
+    from gasp.anls.ovlay            import sgbd_get_feat_within
+    from gasp.anls.ovlay            import sgbd_get_feat_not_within
+    from gasp.to.rst.gdl            import shp_to_raster
     
     time_a = datetime.datetime.now().replace(microsecond=0)
-    build12 = "info_builds"
-    intersect_point_with_polygon(osmsq,
-        "pnt_buildings", "pnt_geom",
-        "poly_buildings", "poly_geom",
-        build12,
-        "pnt_build AS cls",
-        "poly_geom AS geometry",
-        ("(SELECT buildings as pnt_build, geometry AS pnt_geom "
-         "FROM {} WHERE buildings IS NOT NULL) AS pnt_buildings"
-        ).format(pntTbl),
-        ("(SELECT buildings AS poly_build, geometry AS poly_geom "
-         "FROM {} WHERE buildings IS NOT NULL) AS poly_buildings"
-        ).format(polTbl),
-        outTblIsFile=None
+    build12 = sgbd_get_feat_within(
+        osmLink, (
+            "(SELECT buildings as pnt_build, geometry AS pnt_geom "
+            "FROM {} WHERE buildings IS NOT NULL)"
+        ).format(pntTbl), "pnt_geom", (
+            "(SELECT buildings AS poly_build, geometry AS poly_geom "
+            "FROM {} WHERE buildings IS NOT NULL)"
+        ).format(polTbl), "poly_geom", "info_builds",
+        inTblCols="pnt_build AS cls", withinCols="poly_geom AS geometry",
+        outTblIsFile=None,
+        apiToUse="OGR_SPATIALITE" if apidb != "POSTGIS" else apidb
     )
     time_b = datetime.datetime.now().replace(microsecond=0)
     
-    build11 = os.path.join(folder, 'unkbuilds.shp')
-    disjoint_polygons_rel_points(osmsq,
-        "pnt_buildings", "pnt_geom",
-        "poly_buildings", "poly_geom",
-        build11,
-        "poly_geom AS geometry, 11 AS cls",
-        ("(SELECT buildings AS pnt_build, geometry AS pnt_geom "
-         "FROM {} WHERE buildings IS NOT NULL) AS pnt_buildings"
-        ).format(pntTbl),
-        ("(SELECT building AS poly_build, geometry AS poly_geom "
-         "FROM {} WHERE buildings IS NOT NULL) AS poly_buildings"
-        ).format(polTbl),
-        outTblIsFile=True
+    build11 = sgbd_get_feat_not_within(
+        osmLink, (
+            "(SELECT building AS poly_build, geometry AS poly_geom "
+            "FROM {} WHERE buildings IS NOT NULL)"
+        ).format(polTbl), "poly_geom", (
+            "(SELECT buildings AS pnt_build, geometry AS pnt_geom "
+            "FROM {} WHERE buildings IS NOT NULL)"
+        ).format(pntTbl), "pnt_geom",
+        os.path.join(folder, 'unkbuilds.shp'),
+        inTblCols="poly_geom AS geometry, 11 AS cls", outTblIsFile=True,
+        apiToUse="OGR_SPATIALITE" if apidb != "POSTGIS" else apidb
     )
     time_c = datetime.datetime.now().replace(microsecond=0)
     
@@ -277,9 +277,9 @@ def num_assign_builds(osmsq, pntTbl, polTbl, folder, cells, srscode, rtemplate):
         # To Raster
         time_x = datetime.datetime.now().replace(microsecond=0)
         rstbuild = shp_to_raster(
-            buildShp, cells, -1,
+            buildShp, cells, 0,
             os.path.join(folder, 'rst_build_{}.tif'.format(cls)),
-            srscode, rtemplate
+            srscode, rstT
         )
         time_y = datetime.datetime.now().replace(microsecond=0)
         
@@ -288,25 +288,35 @@ def num_assign_builds(osmsq, pntTbl, polTbl, folder, cells, srscode, rtemplate):
         timeGasto[33] = ('to_rst_{}'.format(cls), time_y - time_x)
     
     def build12_torst(buildTbl):
-        LulcCls = sqlq_to_df(osmsq, "SELECT cls FROM {} GROUP BY cls".format(
-            buildTbl)).cls.tolist()
+        LulcCls = sqlq_to_df(
+            osmLink, "SELECT cls FROM {} GROUP BY cls".format(buildTbl)
+        ).cls.tolist()
         
         for lulc_cls in LulcCls:
             time_m = datetime.datetime.now().replace(microsecond=0)
             
             # To SHP
-            shpB = sel_by_attr(
-                osmsq, "SELECT * FROM {} WHERE cls={}".format(
-                    buildTbl, str(lulc_cls)
-                ), os.path.join(folder, 'nshp_build_{}.shp'.format(lulc_cls))
-            )
+            if apidb == 'SQLITE':
+                shpB = sel_by_attr(
+                    osmLink, "SELECT * FROM {} WHERE cls={}".format(
+                        buildTbl, str(lulc_cls)
+                    ), os.path.join(folder, 'nshp_build_{}.shp'.format(lulc_cls))
+                )
+            
+            else:
+                shpB = sel_by_attr(
+                    osmLink, "SELECT * FROM {} WHERE cls={}".format(
+                        buildTbl, str(lulc_cls)
+                    ), os.path.join(folder, 'nshp_build_{}.shp'.format(lulc_cls)),
+                    api='pgsql2shp', geom_col="geometry", tableIsQuery=True
+                )
             time_n = datetime.datetime.now().replace(microsecond=0)
             
             # To RST
             brst = shp_to_raster(
-                shpB, cells, -1,
+                shpB, cells, 0,
                 os.path.join(folder, 'nrst_build_{}.tif'.format(lulc_cls)),
-                srscode, rtemplate
+                srscode, rstT
             )
             time_o = datetime.datetime.now().replace(microsecond=0)
             

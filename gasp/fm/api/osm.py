@@ -3,7 +3,8 @@ Methods to extract OSM data from the internet
 """
 
 
-def download_by_boundary(input_boundary, output_osm, epsg, area_threshold=None):
+def download_by_boundary(input_boundary, output_osm, epsg, area_threshold=None,
+                         GetUrl=True):
     """
     Download data from OSM using a bounding box
     """
@@ -55,6 +56,9 @@ def download_by_boundary(input_boundary, output_osm, epsg, area_threshold=None):
     bbox_str = ','.join([str(left), str(bottom), str(right), str(top)])
     
     url = "http://overpass-api.de/api/map?bbox={box}".format(box=bbox_str)
+    
+    if GetUrl:
+        return url
     
     osm_file = get_file(url, output_osm)
     

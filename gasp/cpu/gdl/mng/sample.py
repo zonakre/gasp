@@ -5,7 +5,7 @@ Sampling tools using OGR Library
 from osgeo import ogr
 from osgeo import gdal
 
-def create_fishnet(boundary, width, height, fishnet):
+def create_fishnet(boundary, fishnet, width=None, height=None, rowN=None, colN=None):
     """
     Create a Fishnet
     """
@@ -13,32 +13,49 @@ def create_fishnet(boundary, width, height, fishnet):
     import os
     from math                 import ceil
     from gasp.oss             import get_filename
-    from gasp.cpu.gdl         import drv_name
+    from gasp.prop.ff         import drv_name
     from gasp.prop.ext        import get_extent
     from gasp.cpu.gdl.mng.prj import get_shp_sref
     
     # Get boundary extent
-    xmin, xmax, ymin, ymax = get_extent(boundary, gisApi='ogr')
+    xmin, xmax, ymin, ymax = [float(x) for x in get_extent(boundary, gisApi='ogr')]
     
-    # Clean width and height
-    if type(width) != float:
-        try:
-            # Convert to float
-            width = float(width)
-        except:
-            return 'Width value is not valid. Please give a numeric value'
+    if width and height:
+        # Clean width and height
+        if type(width) != float:
+            try:
+                # Convert to float
+                width = float(width)
+            except:
+                raise ValueError(
+                    'Width value is not valid. Please give a numeric value'
+                )
     
-    if type(height) != float:
-        try:
-            # Convert to float
-            height = float(height)
-        except:
-            return 'Height value is not valid. Please give a numeric value'
+        if type(height) != float:
+            try:
+                # Convert to float
+                height = float(height)
+            except:
+                raise ValueError(
+                    'Height value is not valid. Please give a numeric value'
+                )
     
-    # get rows number
-    rows = ceil((ymax-ymin) / height)
-    # get columns number
-    cols = ceil((xmax-xmin) / width)
+        # get rows number
+        rows = ceil((ymax-ymin) / height)
+        # get columns number
+        cols = ceil((xmax-xmin) / width)
+    
+    else:
+        if rowN and colN:
+            rows = int(rowN); cols = int(colN)
+            width = ceil((xmax-xmin) / rows)
+            height = ceil((ymax-ymin) / cols)
+        
+        else:
+            raise ValueError(
+                "You must specify the width and height of fishnet cells or "
+                "instead the number of rows and cols of fishnet"
+            )
     
     # Create output file
     if not os.path.exists(os.path.dirname(fishnet)):
@@ -96,6 +113,8 @@ def create_fishnet(boundary, width, height, fishnet):
         ringXrightOrigin = ringXrightOrigin + width
     
     out_fishnet.Destroy()
+    
+    return fishnet
 
 
 def points_as_grid(boundary, fishnet_pnt, width=None, height=None,
@@ -107,7 +126,7 @@ def points_as_grid(boundary, fishnet_pnt, width=None, height=None,
     import os
     from math                 import ceil
     from gasp.oss             import get_filename
-    from gasp.cpu.gdl         import drv_name
+    from gasp.prop.ff         import drv_name
     from gasp.prop.ext        import get_extent
     from gasp.cpu.gdl.mng.prj import get_shp_sref
     
