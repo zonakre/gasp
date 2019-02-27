@@ -19,7 +19,7 @@ def clip(inFeat, clipFeat, outFeat, api_gis="grass"):
         
         vclip = Module(
             "v.clip", input=inFeat, clip=clipFeat,
-            output=outFeat, overwrite=True, run_=False
+            output=outFeat, overwrite=True, run_=False, quiet=True
         )
         
         vclip()
@@ -28,7 +28,7 @@ def clip(inFeat, clipFeat, outFeat, api_gis="grass"):
         from gasp import exec_cmd
         
         rcmd = exec_cmd(
-            "v.clip input={} clip={} output={} --overwrite".format(
+            "v.clip input={} clip={} output={} --overwrite --quiet".format(
                 inFeat, clipFeat, outFeat
             )
         )
@@ -37,6 +37,45 @@ def clip(inFeat, clipFeat, outFeat, api_gis="grass"):
         raise ValueError("{} is not available!".format(api_gis))
     
     return outFeat
+
+
+def clip_shp_by_listshp(inShp, clipLst, outLst):
+    """
+    Clip shapes using as clipFeatures all SHP in clipShp
+    Uses a very fast process with a parallel procedures approach
+    
+    For now, only works with GRASS GIS
+    
+    Not Working nice with v.clip because of the database
+    """
+    
+    """
+    import copy
+    from grass.pygrass.modules import Module, ParallelModuleQueue
+    
+    op_list = []
+    
+    clipMod = Module(
+        "v.clip", input=inShp, overwrite=True, run_=False, quiet=True
+    )
+    qq = ParallelModuleQueue(nprocs=5)
+    
+    for i in range(len(clipLst)):
+        new_clip = copy.deepcopy(clipMod)
+        
+        op_list.append(new_clip)
+        
+        m = new_clip(clip=clipLst[i], output=outLst[i])
+        
+        qq.put(m)
+    qq.wait()
+    """
+    
+    o = [clip(
+        inShp, clipLst[i], outLst[i], api_gis="grass_cmd"
+    ) for i in range(len(clipLst))]
+    
+    return outLst
 
 
 def union(lyrA, lyrB, outShp, api_gis="arcpy"):
@@ -93,8 +132,169 @@ def union(lyrA, lyrB, outShp, api_gis="arcpy"):
     return outShp
 
 
+def union_for_all_pairs(inputList):
+    """
+    Calculates the geometric union of the overlayed polygon layers 
+    for all pairs in inputList
+    
+    THis is not a good idea! It is only an example!
+    """
+    
+    import copy
+    from grass.pygrass.modules import Module, ParallelModuleQueue
+    
+    op_list = []
+    
+    unionTool = Module(
+        "v.overlay", atype="area", btype="area", operator="or",
+        overwrite=True, run_=False, quiet=True
+    )
+    
+    qq = ParallelModuleQueue(nprocs=5)
+    outputs = []
+    for lyr_a, lyr_b in inputList:
+        new_union = copy.deepcopy(unionTool)
+        op_list.append(new_union)
+        
+        un_result = "{}_{}".format(lyr_a, lyr_b)
+        nu = new_union(
+            ainput=lyr_a, binput=lyr_b, ouput=un_result
+        )
+        
+        qq.put(nu)
+        outputs.append(un_result)
+    
+    qq.wait()
+    
+    return outputs
+
+
+def optimized_union_anls(lyr_a, lyr_b, outShp, ref_boundary, epsg,
+                         workspace=None, multiProcess=None):
+    """
+    Optimized Union Analysis
+    
+    Goal: optimize v.overlay performance for Union operations
+    """
+    
+    import os
+    from gasp.oss                import get_filename
+    from gasp.cpu.gdl.mng.sample import create_fishnet
+    from gasp.mng.feat           import eachfeat_to_newshp
+    from gasp.mng.gen            import merge_feat
+    from gasp.cpu.grs            import run_grass
+    from gasp.anls.exct          import split_shp_by_attr
+    
+    if workspace:
+        if not os.path.exists(workspace):
+            from gasp.oss.ops import create_folder
+            
+            create_folder(workspace, overwrite=True)
+    
+    else:
+        from gasp.oss.ops import create_folder
+        
+        workspace = create_folder(os.path.join(
+            os.path.dirname(outShp), "union_work"))
+    
+    # Create Fishnet
+    gridShp = create_fishnet(
+        ref_boundary, os.path.join(workspace, 'ref_grid.shp'),
+        rowN=4, colN=4
+    )
+    
+    # Split Fishnet in several files
+    cellsShp = eachfeat_to_newshp(gridShp, workspace, epsg=epsg)
+    
+    if not multiProcess:
+        # INIT GRASS GIS Session
+        grsbase = run_grass(workspace, location="grs_loc", srs=ref_boundary)
+        
+        import grass.script.setup as gsetup
+        
+        gsetup.init(grsbase, workspace, "grs_loc", 'PERMANENT')
+        
+        # Add data to GRASS GIS
+        from gasp.to.shp.grs import shp_to_grs
+        cellsShp   = [shp_to_grs(
+            shp, get_filename(shp), asCMD=True
+        ) for shp in cellsShp]
+        
+        LYR_A = shp_to_grs(lyr_a, get_filename(lyr_a), asCMD=True)
+        LYR_B = shp_to_grs(lyr_b, get_filename(lyr_b), asCMD=True)
+        
+        # Clip Layers A and B for each CELL in fishnet
+        LYRS_A = [clip(
+            LYR_A, cellsShp[x], LYR_A + "_" + str(x), api_gis="grass_cmd"
+        ) for x in range(len(cellsShp))]; LYRS_B = [clip(
+            LYR_B, cellsShp[x], LYR_B + "_" + str(x), api_gis="grass_cmd"
+        ) for x in range(len(cellsShp))]
+        
+        # Union SHPS
+        UNION_SHP = [union(
+            LYRS_A[i], LYRS_B[i], "un_{}".format(i), api_gis="grass_cmd"
+        ) for i in range(len(cellsShp))]
+        
+        # Export Data
+        from gasp.to.shp.grs import grs_to_shp
+        _UNION_SHP = [grs_to_shp(
+            shp, os.path.join(workspace, shp + ".shp"), "area"
+        ) for shp in UNION_SHP]
+    
+    else:
+        def clip_and_union(la, lb, cell, work, ref, proc, output):
+            # Start GRASS GIS Session
+            grsbase = run_grass(work, location="proc_" + str(proc), srs=ref)
+            import grass.script.setup as gsetup
+            gsetup.init(grsbase, work, "proc_" + str(proc), 'PERMANENT')
+            
+            # Import GRASS GIS modules
+            from gasp.to.shp.grs import shp_to_grs
+            from gasp.to.shp.grs import grs_to_shp
+            
+            # Add data to GRASS
+            a = shp_to_grs(la, get_filename(la), asCMD=True)
+            b = shp_to_grs(lb, get_filename(lb), asCMD=True)
+            c = shp_to_grs(cell, get_filename(cell), asCMD=True)
+            
+            # Clip
+            a_clip = clip(a, c, "{}_clip".format(a), api_gis="grass_cmd")
+            b_clip = clip(b, c, "{}_clip".format(b), api_gis="grass_cmd")
+            
+            # Union
+            u_shp = union(a_clip, b_clip, "un_{}".format(c), api_gis="grass_cmd")
+            
+            # Export
+            o = grs_to_shp(u_shp, output, "area")
+        
+        import multiprocessing
+        
+        thrds = [multiprocessing.Process(
+            target=clip_and_union, name="th-{}".format(i), args=(
+                lyr_a, lyr_b, cellsShp[i],
+                os.path.join(workspace, "th_{}".format(i)), ref_boundary, i,
+                os.path.join(workspace, "uniao_{}.shp".format(i))
+            )
+        ) for i in range(len(cellsShp))]
+        
+        for t in thrds:
+            t.start()
+        
+        for t in thrds:
+            t.join()
+        
+        _UNION_SHP = [os.path.join(
+            workspace, "uniao_{}.shp".format(i)
+        ) for i in range(len(cellsShp))]
+    
+    # Merge all union into the same layer
+    MERGED_SHP = merge_feat(_UNION_SHP, outShp, api="ogr2ogr")
+    
+    return outShp
+
+
 def check_shape_diff(SHAPES_TO_COMPARE, OUT_FOLDER, REPORT, conPARAM, DB, SRS_CODE,
-                     GIS_SOFTWARE="GRASS", RST_GRASS_TEMPLATE=None):
+                     GIS_SOFTWARE="GRASS", GRASS_REGION_TEMPLATE=None):
     """
     Script to check differences between pairs of Feature Classes
     
@@ -115,6 +315,7 @@ def check_shape_diff(SHAPES_TO_COMPARE, OUT_FOLDER, REPORT, conPARAM, DB, SRS_CO
     - GRASS.
     """
     
+    import datetime
     import os;                    import pandas
     from gasp.fm.psql             import query_to_df
     from gasp.cpu.psql.mng        import create_db, tbls_to_tbl
@@ -137,10 +338,16 @@ def check_shape_diff(SHAPES_TO_COMPARE, OUT_FOLDER, REPORT, conPARAM, DB, SRS_CO
     
     # Start GRASS GIS Session if GIS_SOFTWARE == GRASS
     if GIS_SOFTWARE == "GRASS":
-        from gasp.cpu.grs      import run_grass
+        if not GRASS_REGION_TEMPLATE:
+            raise ValueError(
+                'To use GRASS GIS you need to specify GRASS_REGION_TEMPLATE'
+            )
+        
+        from gasp.cpu.grs import run_grass
         
         gbase = run_grass(
-            OUT_FOLDER, grassBIN='grass76', location='shpdif', srs=SRS_CODE
+            OUT_FOLDER, grassBIN='grass76', location='shpdif',
+            srs=GRASS_REGION_TEMPLATE
         )
         
         import grass.script as grass
@@ -148,28 +355,16 @@ def check_shape_diff(SHAPES_TO_COMPARE, OUT_FOLDER, REPORT, conPARAM, DB, SRS_CO
         
         gsetup.init(gbase, OUT_FOLDER, 'shpdif', 'PERMANENT')
         
-        from gasp.cpu.grs.conf import rst_to_region
         from gasp.cpu.grs.mng.tbl import rename_col
-        from gasp.to.shp.grs   import shp_to_grs, grs_to_shp
-        from gasp.to.rst.grs   import rst_to_grs
-        
-        # Define g.region
-        if not RST_GRASS_TEMPLATE:
-            raise ValueError(
-                'To use GRASS GIS you need to specify RST_GRASS_TEMPLATE'
-            )
-        
-        tmpRst = rst_to_grs(RST_GRASS_TEMPLATE, get_filename(
-            RST_GRASS_TEMPLATE), as_cmd=True)
-        rst_to_region(tmpRst)
+        from gasp.to.shp.grs      import shp_to_grs, grs_to_shp
+        from gasp.to.rst.grs      import rst_to_grs
+        from gasp.mng.fld         import rename_column
     
     # Convert to SHAPE if file is Raster
     # Import to GRASS GIS if GIS SOFTWARE == GRASS
     i = 0
+    _SHP_TO_COMPARE = {}
     for s in SHAPES_TO_COMPARE:
-        if not os.path.exists(s):
-            continue
-        
         isRaster = check_isRaster(s)
     
         if isRaster:
@@ -178,9 +373,7 @@ def check_shape_diff(SHAPES_TO_COMPARE, OUT_FOLDER, REPORT, conPARAM, DB, SRS_CO
                     os.path.dirname(s), get_filename(s) + '.shp'
                 ), gisApi='arcpy')
         
-                SHAPES_TO_COMPARE[d] = "gridcode"
-        
-                del SHAPES_TO_COMPARE[s]
+                _SHP_TO_COMPARE[d] = "gridcode"
             
             elif GIS_SOFTWARE == "GRASS":
                 # To GRASS
@@ -190,30 +383,35 @@ def check_shape_diff(SHAPES_TO_COMPARE, OUT_FOLDER, REPORT, conPARAM, DB, SRS_CO
                 d       = rst_to_polyg(inRst, rstName,
                     rstColumn="lulc_{}".format(i), gisApi="grasscmd")
                 
-                SHAPES_TO_COMPARE[d] = "lulc_{}".format(i)
+                # Export Shapefile
+                shp = grs_to_shp(
+                    d, os.path.join(OUT_FOLDER, d + '.shp'), "area")
                 
-                del SHAPES_TO_COMPARE[s]
+                _SHP_TO_COMPARE[shp] = "lulc_{}".format(i)
     
         else:
             if GIS_SOFTWARE == "ARCGIS":
-                continue
+                _SHP_TO_COMPARE[s] = SHAPES_TO_COMPARE[s]
             
             elif GIS_SOFTWARE == "GRASS":
                 # To GRASS
-                grsVect = shp_to_grs(s, get_filename(s), asCMD=True)
+                grsV = shp_to_grs(s, get_filename(s), asCMD=True)
                 
                 # Change name of column with comparing value
                 rename_col(
-                    grsVect, SHAPES_TO_COMPARE[s],
+                    grsV, SHAPES_TO_COMPARE[s],
                     "lulc_{}".format(i), as_cmd=True
                 )
                 
-                SHAPES_TO_COMPARE[grsVect] = "lulc_{}".format(i)
+                # Export
+                shp = grs_to_shp(
+                    grsV, os.path.join(OUT_FOLDER, grsV + '_rn.shp'), "area")
                 
-                del SHAPES_TO_COMPARE[s]
+                _SHP_TO_COMPARE[shp] = "lulc_{}".format(i)
         
         i += 1
     
+    SHAPES_TO_COMPARE = _SHP_TO_COMPARE
     if GIS_SOFTWARE == "ARCGIS":
         from gasp.cpu.arcg.mng.fld    import calc_fld
         from gasp.cpu.arcg.mng.wspace import create_geodb
@@ -312,6 +510,7 @@ def check_shape_diff(SHAPES_TO_COMPARE, OUT_FOLDER, REPORT, conPARAM, DB, SRS_CO
                     ), api_gis="arcpy")
             
             elif GIS_SOFTWARE == "GRASS":
+                """
                 __unShp = union(
                     SHPS[i], SHPS[e], "un_{}_{}".format(i, e),
                     api_gis="grass_cmd"
@@ -327,6 +526,26 @@ def check_shape_diff(SHAPES_TO_COMPARE, OUT_FOLDER, REPORT, conPARAM, DB, SRS_CO
                 
                 unShp = grs_to_shp(__unShp, os.path.join(
                     OUT_FOLDER, __unShp + ".shp"), "area")
+                """
+                
+                # Optimized Union
+                print "Union between {} and {}".format(SHPS[i], SHPS[e])
+                time_a = datetime.datetime.now().replace(microsecond=0)
+                __unShp = optimized_union_anls(
+                    SHPS[i], SHPS[e],
+                    os.path.join(OUT_FOLDER, "un_{}_{}.shp".format(i, e)),
+                    GRASS_REGION_TEMPLATE, SRS_CODE,
+                    os.path.join(OUT_FOLDER, "work_{}_{}".format(i, e)),
+                    multiProcess=True
+                )
+                time_b = datetime.datetime.now().replace(microsecond=0)
+                print time_b - time_a
+                
+                # Rename cols
+                unShp = rename_column(__unShp, {
+                    "a_" + __SHAPES_TO_COMPARE[SHPS[i]] : __SHAPES_TO_COMPARE[SHPS[i]],
+                    "b_" + __SHAPES_TO_COMPARE[SHPS[e]] : __SHAPES_TO_COMPARE[SHPS[e]]
+                }, os.path.join(OUT_FOLDER, "un_{}_{}_rn.shp".format(i, e)))
             
             UNION_SHAPE[(SHPS[i], SHPS[e])] = unShp
     

@@ -3,7 +3,7 @@ Overlay operations with GRASS GIS
 """
 
 
-def erase(inShp, erase_feat, out, asCMD=None):
+def erase(inShp, erase_feat, out, asCMD=None, notTbl=None):
     """
     Difference operations between vectors
     """
@@ -14,7 +14,8 @@ def erase(inShp, erase_feat, out, asCMD=None):
         erase = Module(
             "v.overlay", ainput=inShp, atype="area",
             binput=erase_feat, btype="area", operator="not",
-            output=out, overwrite=True, run_=False, quiet=True
+            output=out, overwrite=True, run_=False, quiet=True,
+            flags='t' if notTbl else None
         )
     
         erase()
@@ -24,9 +25,9 @@ def erase(inShp, erase_feat, out, asCMD=None):
         
         rcmd = exec_cmd((
             "v.overlay ainput={} atype=area binput={} "
-            "btype=area operator=not output={} "
+            "btype=area operator=not output={} {}"
             "--overwrite --quiet"
-        ).format(inShp, erase_feat, out))
+        ).format(inShp, erase_feat, out, "" if not notTbl else "-t "))
     
     return out
 
@@ -37,7 +38,7 @@ def intersection(aentrada, bentrada, saida):
     clip = Module(
         "v.overlay", ainput=aentrada, atype="area",
         binput=bentrada, btype="area", operator="and",
-        output=saida,  overwrite=True, run_=False
+        output=saida,  overwrite=True, run_=False, quiet=True
     )
     
     clip()

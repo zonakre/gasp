@@ -238,3 +238,22 @@ def arcg_buffering(lineTbl, nomenclature):
     
     return resCls
 
+
+def water_lines_to_polygon():
+    """
+    Convert OSM Lines to Polygons expressing existence of water bodies
+    with the help of Sattelite imagery and Normalized Difference Watter
+    Index.
+    """
+    
+    """
+    Procedure:
+    1 - Apply NWDI
+    2 - Reclassify: Water - 1; No Water - NoData
+    3 - Region Group
+    4 - See if Water Lines overlap Water Regions and which regions
+    4.1 - Regions overlaped with Water Lines are considered as water bodies
+    """
+    
+    return None
+

@@ -40,7 +40,6 @@ def write_sld(attribute_name, attribute_value_colors, sld_path,
     """
 
     import os
-    
     from gasp.Xml          import write_xml_tree
     from gasp.ogcsld.rules import get_categorical_rules
     from gasp.ogcsld.rules import get_quantitative_rules
@@ -202,7 +201,7 @@ def write_sld_from_pgtable(
     return sld
 
 
-def write_raster_sld(attrProp, outSld):
+def write_raster_sld(attrProp, outSld, dataType="CATEGORICAL"):
     """
     Write a SLD for a raster with categorical values
     
@@ -210,10 +209,23 @@ def write_raster_sld(attrProp, outSld):
         raster_value : {"COLOR" : hex, "LABEL" : some_label},
         ...
     }
-    TODO: Add ways to create a sld for a floating point raster
+    
+    OR
+    attrProp = {
+        raster_value : {
+            "COLOR" : (red value, green_value, blue_value),
+            "LABEL" : some_label
+        },
+        ...
+    }
+    
+    dataType Options:
+    * CATEGORICAL;
+    * FLOATING;
     """
     
     from gasp.Xml import write_xml_tree
+    from gasp import rgb_to_hex
     
     # SLD Basic Structure
     sldRoot = (
@@ -226,12 +238,35 @@ def write_raster_sld(attrProp, outSld):
     
     # Create a propor dict with style options for every value
     attrStyleOptions = {}
-    for k in attrProp:
-        attrStyleOptions[(
-            "sld:ColorMapEntry", "color", str(attrProp[k]["COLOR"]),
-            "opacity", "1.0", "quantity", str(k),
+    RASTER_VALUES = attrProp.keys()
+    RASTER_VALUES.sort()
+    rules_Order = []
+    i = 1
+    for k in RASTER_VALUES:
+        # Get Color Value
+        if type(attrProp[k]["COLOR"]) == list or type(attrProp[k]["COLOR"]) == tuple:
+            r, g, b = attrProp[k]["COLOR"]
+            hex_color = rgb_to_hex(r, g, b)
+        else:
+            hex_color = str(attrProp[k]["COLOR"])
+        
+        # Get Opacity Value
+        if "OPACITY" in attrProp[k]:
+            opacity = str(attrProp[k]["OPACITY"])
+        else:
+            opacity = "1.0"
+        
+        so =  (
+            "sld:ColorMapEntry", "color", hex_color,
+            "opacity", opacity, "quantity", str(k),
             "label", str(attrProp[k]["LABEL"])
-        )] = ''
+        )
+        attrStyleOptions[so] = ''
+        rules_Order.append(so)
+        i += 1
+    
+    # Get Type of Color Ramp
+    TYPE_PALETE = 'ramp' if dataType == "FLOATING" else 'values' 
     
     # Create SLD Tree
     sldTree = {
@@ -246,7 +281,7 @@ def write_raster_sld(attrProp, outSld):
                     'sld:FeatureTypeStyle': {
                         'sld:Rule' : {
                             'sld:RasterSymbolizer' : {
-                                ('sld:ColorMap', 'type', 'values') : attrStyleOptions
+                                ('sld:ColorMap', 'type', TYPE_PALETE) : attrStyleOptions
                             }
                         }
                     }
@@ -258,7 +293,8 @@ def write_raster_sld(attrProp, outSld):
     sldOrder = {
         sldRoot         : ['sld:UserLayer'],
         'sld:UserLayer' : ['sld:LayerFeatureConstraints', 'sld:UserStyle'],
-        'sld:UserStyle' : ['sld:Name', 'sld:IsDefault', 'sld:FeatureTypeStyle']
+        'sld:UserStyle' : ['sld:Name', 'sld:IsDefault', 'sld:FeatureTypeStyle'],
+        ('sld:ColorMap', 'type', TYPE_PALETE)  : rules_Order
     }
     # Write SLD file
     write_xml_tree(sldTree, outSld, nodes_order=sldOrder)

@@ -3,5 +3,5 @@
 	"USER"     : "postgres",
 	"PORT"     : "5432",
 	"PASSWORD" : "admin",
-	"TEMPLATE" : "template_postgis"
+	"TEMPLATE" : "postgis_template"
 }

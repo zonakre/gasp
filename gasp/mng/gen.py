@@ -43,3 +43,34 @@ def copy_feat(inShp, outShp, gisApi='arcpy'):
     
     return outShp
 
+
+def merge_feat(shps, outShp, api="ogr2ogr"):
+    """
+    Get all features in several Shapefiles and save them in one file
+    """
+    
+    if api == "ogr2ogr":
+        from gasp         import exec_cmd
+        from gasp.prop.ff import drv_name
+        
+        out_drv = drv_name(outShp)
+        
+        # Create output and copy some features of one layer (first in shps)
+        cmdout = exec_cmd('ogr2ogr -f "{}" {} {}'.format(
+            out_drv, outShp, shps[0]
+        ))
+        
+        # Append remaining layers
+        lcmd = [exec_cmd(
+            'ogr2ogr -f "{}" -update -append {} {}'.format(
+                out_drv, outShp, shps[i]
+            )
+        ) for i in range(1, len(shps))]
+    
+    else:
+        raise ValueError(
+            "{} API is not available"
+        )
+    
+    return outShp
+

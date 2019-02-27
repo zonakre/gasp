@@ -196,10 +196,13 @@ def roads_sqdb(osmcon, lnhTbl, plTbl, apidb='SQLITE', asRst=None):
             time_d = datetime.datetime.now().replace(microsecond=0)
         
             # Update buffer distance field
-            exec_write_query(osmcon, (
+            exec_write_query(osmcon, [(
                 "UPDATE near_roads SET bf_roads = CAST(round(dist_near, 0) AS integer) "
                 "WHERE dist_near >= 1 AND dist_near <= 12"
-            ))
+            ), (
+                "UPDATE near_roads SET bf_roads = 1 WHERE dist_near >= 0 AND "
+                "dist_near < 1"
+            )])
             time_e = datetime.datetime.now().replace(microsecond=0)
         
         else:
@@ -216,8 +219,10 @@ def roads_sqdb(osmcon, lnhTbl, plTbl, apidb='SQLITE', asRst=None):
             exec_write_q(osmcon, [(
                 "UPDATE near_roads SET "
                 "bf_roads = CAST(round(CAST(dist_near AS numeric), 0) AS integer) "
-                "WHERE dist_near >= 1 AND dist_near <= 12"
-            ), "CREATE INDEX near_dist_idx ON near_roads USING gist (geometry)"])
+                "WHERE dist_near >= 1 AND dist_near <= 12"),
+                ("UPDATE near_roads SET bf_roads = 1 WHERE dist_near >= 0 AND "
+                 "dist_near < 1"),
+                "CREATE INDEX near_dist_idx ON near_roads USING gist (geometry)"])
             time_e = datetime.datetime.now().replace(microsecond=0)
     
     else:

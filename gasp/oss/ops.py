@@ -6,6 +6,7 @@ Operations with py os
 
 import os
 import shutil
+from gasp.web import get_file
 
 
 def create_folder(folder, randName=None, overwrite=True):
@@ -48,11 +49,14 @@ def del_folder(folder):
 
 def del_file(_file):
     """
-    Delete file if exists
+    Delete files if exists
     """
     
-    if os.path.isfile(_file) and os.path.exists(_file):
-        os.remove(_file)
+    from gasp import goToList
+    
+    for ff in goToList(_file):
+        if os.path.isfile(ff) and os.path.exists(ff):
+            os.remove(ff)
 
 
 def del_file_folder_tree(fld, file_format):
@@ -90,6 +94,25 @@ def del_files_by_partname(folder, partname):
     for _file in files:
         if partname in os.path.basename(_file):
             del_file(_file)
+
+
+def rename_files_with_same_name(folder, oldName, newName):
+    """
+    Rename files in one folder with the same name
+    """
+    
+    from gasp.oss import list_files, get_fileformat
+    
+    _Files = list_files(folder, filename=oldName)
+    
+    Renamed = []
+    for f in _Files:
+        newFile = os.path.join(folder, newName + get_fileformat(f))
+        os.rename(f, newFile)
+        
+        Renamed.append(newFile)
+    
+    return Renamed
 
 
 def onFolder_rename(fld, toBeReplaced, replacement, only_files=True,

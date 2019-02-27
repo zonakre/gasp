@@ -2,9 +2,9 @@
 To be defined
 """
 
-from osgeo         import ogr
+from osgeo        import ogr
 from gasp.prop.ff import drv_name
-from gasp.web      import get_file
+from gasp.web     import get_file
 
 
 def coords_to_boundary(topLeft, lowerRight, epsg, outshp):
@@ -13,7 +13,7 @@ def coords_to_boundary(topLeft, lowerRight, epsg, outshp):
     """
     
     import os
-    from gasp.oss              import get_filename
+    from gasp.oss             import get_filename
     from gasp.cpu.gdl.mng.prj import get_sref_from_epsg
     
     boundary_points = [

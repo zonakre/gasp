@@ -64,7 +64,7 @@ def create_fishnet(boundary, fishnet, width=None, height=None, rowN=None, colN=N
     out_fishnet = ogr.GetDriverByName(drv_name(
         fishnet)).CreateDataSource(fishnet)
     fishnet_lyr = out_fishnet.CreateLayer(
-        get_filename(fishnet), get_shp_sref(boundary),
+        str(get_filename(fishnet)), srs=get_shp_sref(boundary),
         geom_type=ogr.wkbPolygon
     )
     

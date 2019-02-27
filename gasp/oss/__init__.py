@@ -51,10 +51,10 @@ def list_files(w, file_format=None, filename=None):
     List the abs path of all files with a specific extension on a folder
     """
     
+    from gasp import goToList
+    
     # Prepare file format list
     if file_format:
-        from gasp import goToList
-        
         formats = goToList(file_format)
         
         for f in range(len(formats)):
@@ -82,12 +82,11 @@ def list_files(w, file_format=None, filename=None):
         return t
     
     else:
-        filename = [filename] if type(filename) == str or \
-            type(filename) == unicode else filename
+        filename = goToList(filename)
         
         _t = []
         for i in t:
-            if os.path.splitext(os.path.basename(i))[0] in filename:
+            if get_filename(i) in filename:
                 _t.append(i)
         
         return _t

@@ -229,8 +229,7 @@ def clip_by_feature_class(inShp, clipFolder, folderOutputs,
     """
     
     import os
-    
-    from gasp.oss               import list_files
+    from gasp.oss import list_files
     
     clip_fc = list_files(clipFolder, file_format=fFormat)
     

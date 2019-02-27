@@ -431,7 +431,7 @@ def vector_based(osmdata, nomenclature, refRaster, lulcShp,
     from gasp.cpu.grs.anls.ovlay import erase
     from gasp.cpu.grs.conf       import rst_to_region
     from gasp.cpu.grs.mng.genze  import dissolve
-    from gasp.cpu.grs.mng.tbl    import reset_table
+    from gasp.cpu.grs.mng.tbl    import add_and_update, reset_table
     from gasp.to.shp.grs         import shp_to_grs, grs_to_shp
     from gasp.to.rst.grs         import rst_to_grs
     # ************************************************************************ #
@@ -556,10 +556,14 @@ def vector_based(osmdata, nomenclature, refRaster, lulcShp,
                 asCMD=True)
     
     # Erase overlapping areas by priority
+    import copy
+    osmNameRef = copy.deepcopy(osmShps)
+    
     for e in range(len(__priorities)):
         if e + 1 == len(__priorities): break
         
-        if __priorities[e] not in osmShps: continue
+        if __priorities[e] not in osmShps:
+            continue
         else:
             for i in range(e+1, len(__priorities)):
                 if __priorities[i] not in osmShps:
@@ -567,8 +571,8 @@ def vector_based(osmdata, nomenclature, refRaster, lulcShp,
                 else:
                     osmShps[__priorities[i]] = erase(
                         osmShps[__priorities[i]], osmShps[__priorities[e]],
-                        "{}_{}".format(osmShps[__priorities[i]], e),
-                        asCMD=True
+                        "{}_{}".format(osmNameRef[__priorities[i]], e),
+                        asCMD=True, notTbl=True
                     )
     
     time_p = datetime.datetime.now().replace(microsecond=0)
@@ -576,9 +580,13 @@ def vector_based(osmdata, nomenclature, refRaster, lulcShp,
     # Export all classes
     lst_merge = []
     for cls in osmShps:
-        reset_table(
-            osmShps[cls], {'cls' : 'varchar(5)'}, {'cls' : str(cls)}
-        )
+        if cls == __priorities[0]:
+            reset_table(
+                osmShps[cls], {'cls' : 'varchar(5)'}, {'cls' : str(cls)})
+        else:
+            add_and_update(
+                osmShps[cls], {'cls' : 'varchar(5)'}, {'cls' : str(cls)}
+            )
         
         ds = dissolve(
             osmShps[cls], 'dl_{}'.format(str(cls)), 'cls', asCMD=True)

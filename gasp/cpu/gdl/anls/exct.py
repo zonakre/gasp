@@ -111,7 +111,7 @@ def sel_by_attr(inShp, sql, outShp):
     
     out_driver = drv_name(outShp)
     
-    cmd = 'ogr2ogr -f "{drv}" {o} {i} -dialect sqlite -sql "{s};"'.format(
+    cmd = 'ogr2ogr -f "{drv}" {o} {i} -dialect sqlite -sql "{s}"'.format(
         o=outShp, i=inShp, s=sql, drv=out_driver
     )
     

@@ -49,7 +49,7 @@ def eachfeat_to_newshp(inShp, outFolder, epsg=None):
             drv_name(newShp)).CreateDataSource(newShp)
         
         newLyr = newData.CreateLayer(
-            get_filename(newShp), srs, geom_type=geomCls
+            str(get_filename(newShp)), srs, geom_type=geomCls
         )
         
         # Copy fields from input to output

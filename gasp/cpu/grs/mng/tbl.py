@@ -117,6 +117,26 @@ def reset_table(table, new_flds, values2write, whr_fields=None):
                 whr_fields[f]
         )
 
+def add_and_update(table, new_flds, val_to_write):
+    """
+    Create new table and put some values in it
+    """
+    
+    if type(new_flds) != dict:
+        raise ValueError("new_flds must be a dict")
+    
+    if type(val_to_write) != dict:
+        raise ValueError("values2write must be a dict")
+    
+    add_table(table, ", ".join([
+        '{} {}'.format(f, new_flds[f]) for f in new_flds
+    ]))
+    
+    for fld in val_to_write:
+        update_table(
+            table, fld, val_to_write[fld],
+            "{} IS NULL".format(fld), ascmd=None
+        )
 
 def rename_col(tbl, oldCol, newCol, as_cmd=None):
     """
