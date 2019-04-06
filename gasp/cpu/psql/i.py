@@ -41,25 +41,42 @@ def db_exists(lnk, db):
 """
 Tables Info
 """
-def lst_tbl(dic_con, schema='public'):
+def lst_views(conParam, schema='public'):
+    """
+    List Views in database
+    """
+    
+    from gasp.fm.psql import query_to_df
+    
+    views = query_to_df(conParam, (
+        "SELECT table_name FROM information_schema.views "
+        "WHERE table_schema='{}'"
+    ).format(schema))
+    
+    return views.table_name.tolist()
+
+
+def lst_tbl(dic_con, schema='public', excludeViews=None):
     """
     list tables in a database
     """
     
-    conn = connection(dic_con)
+    from gasp.fm.psql import query_to_df
     
-    cs = conn.cursor()
-    cs.execute((
+    tbls = query_to_df(dic_con, (
         "SELECT table_name FROM information_schema.tables "
-        "WHERE table_schema='{s}'".format(s=schema)
-    ))
+        "WHERE table_schema='{}'"
+    ).format(schema))
     
-    f = [x[0] for x in cs.fetchall()]
+    if excludeViews:
+        views = lst_views(dic_con, schema=schema)
+        
+        __tbls = [i for i in tbls.table_name.tolist() if i not in views]
     
-    cs.close()
-    conn.close()
+    else:
+        __tbls = tbls.table_name.tolist()
     
-    return f
+    return __tbls
 
 
 def lst_tbl_basename(basename, dic_con, schema='public'):

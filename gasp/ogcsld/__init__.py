@@ -3,108 +3,109 @@ Write SLD with Python
 """
 
 
-def write_sld(attribute_name, attribute_value_colors, sld_path,
-              geometry=None, opacity=None, DATA='CATEGORICAL'):
+def write_sld(attr_name, attr_colors, mapAttrKeys, sld_path,
+              geometry=None, DATA='CATEGORICAL'):
     """
     Write a sld file using an association between field attributes and a color
 
-    * attribute_name - name of a column in a layer
-    * DATA - Options: CATEGORICAL | QUANTITATIVE
+    * attr_name -> name of a column in a layer
     
-    * attribute_colors - dict or table with attribute values as keys and
-    colors (HEX/RGB) as values.
+    * DATA -> CATEGORICAL | QUANTITATIVE
     
-    For QUANTITATIVE DATA: 'attribute_value_colors' should be a xls
-    table with the following structure
+    * attr_colors -> list or table with styles for some category or interval
     
-    COLORS SHEET STRUCTURE (Sheet Index = 0):
+    TABLE EXAMPLE (Sheet Index = 0):
          | min | max | R | G | B
        1 |  0  |  5  | X | X | X
        2 |  5  |  10 | X | X | X
        3 |  10 |  15 | X | X | X
        4 |  15 |  20 | X | X | X
        5 |  20 |  25 | X | X | X
-    
-    OR a dict with such:
-    dict = {
-        1 : {'min':  0, 'max':  5, 'R': X, 'G': X, 'B': X},
-        2 : {'min':  5, 'max': 10, 'R': X, 'G': X, 'B': X},
-        3 : {'min': 10, 'max': 15, 'R': X, 'G': X, 'B': X},
-        4 : {'min': 15, 'max': 20, 'R': X, 'G': X, 'B': X},
-        5 : {'min': 20, 'max': 25, 'R': X, 'G': X, 'B': X}
+       
+    LIST EXAMPLE:
+    attr_colors = [
+        {'min':  0, 'max':  5, 'R': X, 'G': X, 'B': X},
+        {'min':  5, 'max': 10, 'R': X, 'G': X, 'B': X},
+        {'min': 10, 'max': 15, 'R': X, 'G': X, 'B': X},
+        {'min': 15, 'max': 20, 'R': X, 'G': X, 'B': X},
+        {'min': 20, 'max': 25, 'R': X, 'G': X, 'B': X}
     }
+    
+    * mapAttrKeys -> dict with the relation between the meaning of the 
+    columns/keys in attr_colors
+    
+    EXAMPLE:
+    mapAttrKeys = {
+        'r' : 'R', 'g' : 'G', 'b' : 'B', 'interval_min' : 'min',
+        'interval_max' : 'max'
+    }
+    
+    keys that could be used:
+    * r -> attr_colors key/column with red of red|green|blue cat color
+    * g -> attr_colors key/column with green of red|green|blue cat color
+    * b -> attr_colors key/column with blue of red|green|blue cat color
+    * hex -> attr_colors key/column with color hex
+    * interval_min -> attr_colors key/column com limiar inferior do intervalo
+    * interval_max -> attr_colors key/column com limiar superior do intervalo
+    * stroke_hex -> attr_colors key/column with color hex for stroke
+    * stroke_r -> attr_colors key/column with red of red|green|blue stroke color
+    * stroke_g -> attr_colors key/column with green of red|green|blue stroke color
+    * stroke_b -> attr_colors key/column with blue of red|green|blue stroke color
+    * width -> attr_colors key/column with stroke width
+    * opacity -> attr_colors key/column with opacity value for some category
+    * category -> attr_colors key/column with category value
+    
+    sld_path -> path to sld file
+    
+    GEOMETRY -> Polygon | Line
 
     NOTE: This will work only for polygon/linear features
-    TODO: CATEGORICAL works with JSON and dict
-          QUANTITATIVE works with xls
     """
 
     import os
     from gasp.Xml          import write_xml_tree
+    from gasp.oss          import get_fileformat
     from gasp.ogcsld.rules import get_categorical_rules
     from gasp.ogcsld.rules import get_quantitative_rules
-
-    if type(attribute_value_colors) != dict and \
-       os.path.exists(attribute_value_colors):
-        if os.path.splitext(attribute_value_colors)[1] == '.json':
-            if DATA == 'CATEGORICAL':
+    
+    if DATA != 'CATEGORICAL' and DATA != 'QUANTITATIVE':
+        raise ValueError(
+            'DATA should has the value CATEGORICAL or QUANTITATIVE'
+        )
+    
+    if type(attr_colors) != list:
+        if os.path.exists(attr_colors):
+            ff = get_fileformat(attr_colors)
+            
+            if ff == '.json':
                 import json
-                json_data = open(attribute_value_colors, 'r')
-                attribute_value_colors = json.load(json_data)
+                
+                attr_colors = json.load(open(attr_colors, 'r'))
             
-            elif DATA == 'QUANTITATIVE':
-                raise ValueError((
-                    'At the moment, this method could not generate a sld '
-                    'for quantitative data using a JSON File'
-                ))
-            
-            else:
-                raise ValueError((
-                    '{} is not a valid option! Please use one of the two: '
-                    'QUANTITATIVE; CATEGORICAL.'
-                ).format(DATA))
-        
-        elif os.path.splitext(attribute_value_colors)[1] == '.xls':
-            if DATA == 'CATEGORICAL':
-                raise ValueError((
-                    'At the moment, this method could not generate a sld '
-                    'for categorical data using a JSON File'
-                ))
-            
-            elif DATA == 'QUANTITATIVE':
-                from gasp.fm.xls import xls_to_dict
-                attribute_value_colors = xls_to_dict(attribute_value_colors)
+            elif ff == '.xlsx' or ff == '.xls':
+                from gasp.fm.xls import xls_to_df
+                
+                attr_colors = xls_to_df(
+                    attr_colors, sheet=0, useFirstColAsIndex=None
+                ).to_dict(orient="records")
             
             else:
-                raise ValueError((
-                    '{} is not a valid option! Please use one of the two: '
-                    'QUANTITATIVE; CATEGORICAL.'
-                ).format(DATA))            
-        
+                raise ValueError('Your file is not a json or a xls')
         else:
-            raise ValueError('Your file is not a json or a xls')
-
-    elif type(attribute_value_colors) != dict and not \
-         os.path.exists(attribute_value_colors):
-        raise ValueError((
-            'ERROR in argument attribute_value_colors: '
-            'You need to define a dict or give a valid path to a json file or'
-            ' to a xls file'
-        ))
+            raise ValueError((
+                'ERROR in argument attribute_value_colors: '
+                'You need to define a list or give a valid path to a json '
+                'file or to a xls file'
+            ))
 
     GEOMETRY = str(geometry) if geometry else 'Polygon'
-    OPACITY = str(opacity) if opacity else '0.5'
 
     # Create Feature Type Style RULES
     sldRules = get_categorical_rules(
-        attribute_value_colors, attribute_name, GEOMETRY, OPACITY
+        attr_colors, attr_name, GEOMETRY, mapAttrKeys
     ) if DATA == 'CATEGORICAL' else get_quantitative_rules(
-        attribute_value_colors, attribute_name, GEOMETRY, OPACITY
+        attr_colors, attr_name, GEOMETRY, mapAttrKeys
     ) if DATA == 'QUANTITATIVE' else None
-    
-    if not sldRules: raise ValueError(
-        'DATA should has the value CATEGORICAL or QUANTITATIVE'
-    )
 
     # SLD Basic structure
     xml_sld_root = (
@@ -163,42 +164,14 @@ def write_sld(attribute_name, attribute_value_colors, sld_path,
         sld_order[(i+1, 'sld:Rule')] = [
             'sld:Name', 'sld:Title', 'ogc:Filter', symbolizer
         ]
+    
+    if GEOMETRY == 'Polygon':
+        for i in range(len(sldRules.keys())):
+            sld_order['sld:PolygonSymbolizer'] = ['sld:Fill', 'sld:Stroke']
 
     write_xml_tree(sld, sld_path, nodes_order=sld_order)
 
     return sld_path
-
-
-def write_sld_from_pgtable(
-    table, attr_field_source, sld_path,
-    attr_field_table=None, rgb_fields=None, pgsql={
-        'HOST': 'localhost', 'PORT': '5432',
-        'USER': 'postgres', 'PASSWORD': 'admin',
-        'DATABASE': 'shogun_db'
-        }, geom=None, opacity=None, query=None
-    ):
-    
-    from gasp.fm.psql import sql_query
-
-    colsName = [attr_field_table,
-                rgb_fields['R'], rgb_fields['G'], rgb_fields['B']]
-
-    QUERY = query if query else 'SELECT {cols} FROM {t}'.format(
-        t=table, cols=', '.join(colsName)
-    )
-
-    data = sql_query(pgsql, QUERY)
-
-    values_colors = {
-        row[0]: [row[1], row[2], row[3]] for row in data
-    }
-
-    sld = write_sld(
-        attr_field_source, values_colors, sld_path,
-        geometry=geom, opacity=opacity
-    )
-
-    return sld
 
 
 def write_raster_sld(attrProp, outSld, dataType="CATEGORICAL"):

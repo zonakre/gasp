@@ -50,26 +50,19 @@ def publish_postgis_layer(workspace, store, pg_table, title=None, gs_con={
     )
     
     # Create obj with data to be written in the xml
-    if not title:
-        lyr_title = "Title {}".format(pg_table)
-        elements = {
-            "featureType": {
-                "name"  : pg_table,
-                "title" : lyr_title
-            }
+    lyr_title = "Title {}".format(pg_table) if not title else title
+    elements = {
+        "featureType": {
+            "name"  : pg_table,
+            "title" : lyr_title
         }
-    
-    else:
-        elements = {
-            "featureType": {
-                "name"  : pg_table,
-                "title" : title
-            }
-        }
+    }
     
     # Write the xml
-    xml_file = write_xml_tree(elements,
-                              os.path.join(wTmp, '{}.xml'.format(pg_table)))
+    xml_file = write_xml_tree(
+        elements,
+        os.path.join(wTmp, '{}.xml'.format(pg_table))
+    )
     
     # Create Geoserver Layer
     url = (

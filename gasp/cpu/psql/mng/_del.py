@@ -33,7 +33,7 @@ def drop_db(lnk, database):
     con.close()
 
 
-def del_tables(lnk, pg_table_s):
+def del_tables(lnk, pg_table_s, isViews=None):
     """
     Delete all tables in pg_table_s
     """
@@ -50,7 +50,8 @@ def del_tables(lnk, pg_table_s):
     
     for lt in l:
         cursor = con.cursor()
-        cursor.execute('DROP TABLE {};'.format(', '.join(lt)))
+        cursor.execute('DROP {} {};'.format(
+            'TABLE' if not isViews else 'VIEW', ', '.join(lt)))
         con.commit()
         cursor.close()
     

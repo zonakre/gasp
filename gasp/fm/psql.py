@@ -21,36 +21,6 @@ def sql_query(conParam, query, encoding=None):
     return table
 
 
-def pgtable_to_dict(pgTable, pgCon, sanitizeColsName=True, cols=None):
-    """
-    PG TABLE DATA to Python dict
-    """
-    
-    from gasp                  import goToList
-    from gasp.cpu.psql.mng.fld import cols_name
-    
-    cols = cols_name(pgCon, pgTable) if not cols else \
-        goToList(cols)
-    
-    data = sql_query(
-        pgCon,
-        'SELECT {cols_} FROM {table}'.format(
-            cols_=', '.join(cols),
-            table=pgTable
-        )
-    )
-    
-    if not sanitizeColsName:
-        from gasp.cpu.psql import pgsql_special_words
-        for i in range(len(cols)):
-            if cols[i][1:-1] in pgsql_special_words():
-                cols[i] = cols[i][1:-1]
-    
-    return [
-        {cols[i] : row[i] for i in range(len(cols))} for row in data
-    ]
-
-
 def sql_query_with_innerjoin(
     dic4con, main_table_lst, relation_table_lst,
     fld_of_interest, obj_of_interest, fields_to_select):
@@ -107,6 +77,29 @@ def query_to_df(conParam, query):
     df = pandas.read_sql(query, pgengine, columns=None)
     
     return df
+
+
+def pgtable_to_dict(pgTable, pgCon, cols=None):
+    """
+    PG TABLE DATA to Python dict
+    """
+    
+    from gasp                  import goToList
+    from gasp.cpu.psql.mng.fld import cols_name
+    
+    cols = cols_name(pgCon, pgTable) if not cols else \
+        goToList(cols)
+    
+    data = query_to_df(
+        pgCon,
+        'SELECT {cols_} FROM {table}'.format(
+            cols_=', '.join(cols),
+            table=pgTable
+        )
+    ).to_dict(orient="records")
+    
+    return data
+
 
 def psql_to_geodf(conParam, query, geomCol='geom',
                     epsg=None):

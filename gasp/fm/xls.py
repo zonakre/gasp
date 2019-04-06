@@ -15,7 +15,7 @@ def xls_to_df(table_file, sheet=None, useFirstColAsIndex=None):
     
     d = pandas.read_excel(
         table_file, sheet, index_col=indexCol,
-        encoding='utf-8'
+        encoding='utf-8', dtype='object'
     )
     
     return d

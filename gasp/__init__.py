@@ -319,3 +319,19 @@ def id_encodefile(file__):
     
     return detector.result['encoding']
 
+
+"""
+Numbers utils
+"""
+
+def __round(n, n_digits):
+    """
+    Round n
+    """
+    
+    dp = str(n).split('.')[1]
+    
+    mnt = str(int(dp[:n_digits]) + 1) if int(dp[n_digits]) >= 5 else dp[:n_digits]
+    
+    return int(n) + float('0.{}'.format(mnt))
+

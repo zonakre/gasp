@@ -14,13 +14,14 @@ def get_distinct_values(lnk, pgtable, column):
     Get distinct values in one column of one pgtable
     """
     
-    from gasp import goToList
+    from gasp         import goToList
+    from gasp.fm.psql import query_to_df
     
-    data = sql_query(lnk,
+    data = query_to_df(lnk,
         "SELECT {col} FROM {t} GROUP BY {col};".format(
             col=", ".join(goToList(column)), t=pgtable
         )
-    )
+    ).to_dict(orient="records")
     
     return data
 
@@ -71,11 +72,11 @@ def run_query_for_values_in_col(conParam, query,
     fields_types = get_columns_type(conParam, table_interest_col)
     
     # Get  unique values
-    VALUES = sql_query(conParam,
+    VALUES = query_to_df(conParam,
         "SELECT {col} FROM {t} GROUP BY {col}".format(
             col=interest_col, t=table_interest_col
         )
-    )
+    )[interest_col].tolist()
     
     # Aplly query for every value in VALUES
     # Write data in excel

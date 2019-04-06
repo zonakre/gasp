@@ -7,7 +7,7 @@ import psycopg2
 
 
 def pgsql_special_words():
-    return ['table', 'column', 'natural', 'group']
+    return ['table', 'column', 'natural', 'group', 'left', 'right', 'order']
 
 
 def connection(conParam):

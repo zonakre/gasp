@@ -132,7 +132,7 @@ def write_new_table(lnk, pgtable, outtable, where=None,
     return outtable
 
 
-def ntbl_by_query(lnk, outbl, query):
+def ntbl_by_query(lnk, outbl, query, ntblIsView=None):
     """
     Create table by query
     """
@@ -141,7 +141,10 @@ def ntbl_by_query(lnk, outbl, query):
     
     curs = con.cursor()
     
-    _q = "CREATE TABLE {} AS {}".format(outbl, query)
+    _q = "CREATE {} {} AS {}".format(
+        "TABLE" if not ntblIsView else "VIEW",
+        outbl, query
+    )
     
     curs.execute(_q)
     

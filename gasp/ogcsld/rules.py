@@ -2,44 +2,76 @@
 Get Rules for SLD
 """
 
+def style_prop(instance, mapKeys):
+    """
+    Return colors for this class
+    """
+    
+    from gasp  import rgb_to_hex
+    
+    # Get Color
+    if 'hex' in mapKeys:
+        __hex = instance[mapKeys['hex']]
+    else:
+        __hex = rgb_to_hex(
+            instance[mapKeys['r']], instance[mapKeys['g']],
+            instance[mapKeys['b']]
+        )
+    
+    # Get Stroke Color
+    if 'stroke_r' not in mapKeys and 'stroke_hex' not in mapKeys:
+        # Stroke will assume the same color of the geometry
+        __stroke = __hex
+    else:
+        if 'stroke_hex' in mapKeys:
+            __stroke = instance[mapKeys['stroke_hex']]
+        else:
+            __stroke = rgb_to_hex(
+                instance[mapKeys['stroke_r']],
+                instance[mapKeys['stroke_g']], instance[mapKeys['stroke_b']]
+            )
+    
+    # Get Stroke Width
+    __width = None if 'width' not in mapKeys else \
+        instance[mapKeys['width']]
+    
+    # Get Opacity
+    __opacity = "1" if 'opacity' not in mapKeys else \
+        instance[mapKeys['opacity']]
+    
+    return __hex, __stroke, __width, __opacity
 
-def get_categorical_rules(attr_val_color, attr_name, geometry,
-                          transparency):
+
+def get_categorical_rules(attr_val_color, attr_name, geometry, map_keys):
     """
     Get Rules for categorical data
     """
     
-    from gasp  import idcolor_to_hex
     from .symb import get_sld_geom_symbolizer
 
     sldRules = {}
     nr_rules = 1
 
-    for value in attr_val_color:
-        color = attr_val_color[value]
-        __hex = idcolor_to_hex(color)
-
-        __stroke = idcolor_to_hex(attr_val_color[value]['STROKE']) \
-            if 'STROKE' in attr_val_color[value] else None
+    for cls in attr_val_color:
+        # Get Color, Stroke color, Stroke Width Opacity
+        __hex, __stroke, __width, __opacity = style_prop(cls, map_keys)
         
-        __width = attr_val_color[value]['STROKE']['width'] if 'STROKE' in \
-            attr_val_color[value] and \
-            'width' in attr_val_color[value]['STROKE'] else None
-
         sldRules[(nr_rules, 'sld:Rule')] = {
             'sld:Name'   : 'rule{}'.format(str(nr_rules)),
-            'sld:Title'  : unicode(value, 'utf-8'),
+            'sld:Title'  : unicode(
+                cls[map_keys['category']], 'utf-8'),
             'ogc:Filter' : {
                 'ogc:PropertyIsEqualTo' : {
                     'ogc:PropertyName': str(attr_name),
-                    'ogc:Literal'     : unicode(value, 'utf-8')
+                    'ogc:Literal'     : unicode(
+                        cls[map_keys['category']], 'utf-8')
                 }
             }
         }
 
         sldRules[(nr_rules, 'sld:Rule')].update(
             get_sld_geom_symbolizer(
-                geometry, __hex, opacity=transparency,
+                geometry, __hex, opacity=__opacity,
                 polyStroke=__stroke,
                 strokeWidth=__width 
             )
@@ -50,51 +82,42 @@ def get_categorical_rules(attr_val_color, attr_name, geometry,
     return sldRules
 
 
-def get_quantitative_rules(colorIntervals, attr_name, geometry,
-                           transparency):
+def get_quantitative_rules(colorIntervals, attr_name, geometry, map_keys):
     """
     Get Rules for quantitative data
     """
-
-    from gasp  import idcolor_to_hex
+    
     from .symb import get_sld_geom_symbolizer
 
     sldRules = {}
     nr_rules = 1
 
     for cls in colorIntervals:
-        # Convert RGB to HEX
-        __hex = idcolor_to_hex(colorIntervals[cls])
-
-        # Convert Stroke RGB to HEX
-        __stroke = idcolor_to_hex(colorIntervals[cls]['STROKE']) \
-            if 'STROKE' in colorIntervals[cls] else None
+        # Get Color, Stroke color, Stroke Width Opacity
+        __hex, __stroke, __width, __opacity = style_prop(cls, map_keys)
         
-        __width = colorIntervals[cls]['STROKE']['width'] if 'STROKE' in \
-            colorIntervals[cls] and \
-            'width' in colorIntervals[cls]['STROKE'] else None
-        
-        if cls == 1:
-            first_hex = __hex
-            first_stroke = __stroke
-            first_with = __width
+        if nr_rules == 1:
+            first_hex     = __hex
+            first_stroke  = __stroke
+            first_with    = __width
+            first_opacity = __opacity
 
         # Create rule tree
         sldRules[(nr_rules, 'sld:Rule')] = {
             'sld:Name'   : 'rule{}'.format(str(nr_rules)),
             'sld:Title'  : '{}..{}'.format(
-                str(colorIntervals[cls]['min']),
-                str(round(colorIntervals[cls]['max'], 2))
-                ),
+                str(cls[map_keys['interval_min']]),
+                str(cls[map_keys['interval_max']])
+            ),
             'ogc:Filter' : {
                 'ogc:And' : {
                     'ogc:PropertyIsGreaterThan' : {
                         'ogc:PropertyName' : str(attr_name),
-                        'ogc:Literal'      : str(colorIntervals[cls]['min'])
+                        'ogc:Literal'      : str(cls[map_keys['interval_min']])
                         },
                     'ogc:PropertyIsLessThanOrEqualTo' : {
                         'ogc:PropertyName' : str(attr_name),
-                        'ogc:Literal'      : str(colorIntervals[cls]['max'])
+                        'ogc:Literal'      : str(cls[map_keys['interval_max']])
                     }
                 }
             }
@@ -102,7 +125,7 @@ def get_quantitative_rules(colorIntervals, attr_name, geometry,
 
         sldRules[(nr_rules, 'sld:Rule')].update(
             get_sld_geom_symbolizer(
-                geometry, __hex, opacity=transparency,
+                geometry, __hex, opacity=__opacity,
                 polyStroke=__stroke,
                 strokeWidth=__width
             )
@@ -116,14 +139,14 @@ def get_quantitative_rules(colorIntervals, attr_name, geometry,
         'ogc:Filter' : {
             'ogc:PropertyIsEqualTo' : {
                 'ogc:PropertyName' : str(attr_name),
-                'ogc:Literal'      : str(colorIntervals[1]['min'])
+                'ogc:Literal'      : str(colorIntervals[0][map_keys['interval_min']])
             }
         }
     }
     
     sldRules[(nr_rules, 'sld:Rule')].update(
         get_sld_geom_symbolizer(
-            geometry, first_hex, opacity=transparency,
+            geometry, first_hex, opacity=__opacity,
             polyStroke=first_stroke,
             strokeWidth=first_with
         )

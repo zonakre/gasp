@@ -2,7 +2,7 @@
 Manage data in the database using Django API
 """
 
-def shape_to_djgModel(fileShape, djgModel, mapFields, djgProj=None):
+def shape_to_djgModel(fileShape, djgModel, mapFields, djgProj=None, useLyrMap=True):
     """
     Add Geometries to Django Model
     """
@@ -14,78 +14,64 @@ def shape_to_djgModel(fileShape, djgModel, mapFields, djgProj=None):
         
         application = open_Django_Proj(djgProj)
     
-    from django.contrib.gis.utils import LayerMapping
-    
+    APP_MODEL = djgModel.split('_')[0]
     djangoCls = __import('{}.models.{}'.format(
-        djgModel.split('_')[0],
+        APP_MODEL,
         '_'.join(djgModel.split('_')[1:])
     ))
     
-    lm = LayerMapping(djangoCls, fileShape, mapFields)
-    
-    lm.save(strict=True, verbose=False)
-
-
-def shp_to_djgDb(inShp, djgModel, mapFields, epsg, djgProj=None):
-    """
-    Add Geometries to Django Model without using Layer Mapping
-    """
-    
-    from gasp        import __import
-    from gasp.fm.shp import shp_to_df
-    
-    if djgProj:
-        from gasp.djg import open_Django_Proj
-        application = open_Django_Proj(djgProj)
-    
-    from django.contrib.gis.geos import GEOSGeometry
-    from django.contrib.gis.db   import models
-    
-    inDf = shp_to_df(inShp)
-    
-    APP_MODEL = djgModel.split('_')
-    djangoCls = __import('{}.models.{}'.format(
-        APP_MODEL[0], '_'.join(APP_MODEL[1:])
-    ))
-    
-    modelObj = djangoCls()
-    
-    OGR_GEOMS = ['POLYGON', 'MULTIPOLYGON', 'MULTILINESTRING',
-                 'LINESTRING', 'POINT', 'MULTIPOINT']
-    
-    def updateModel(row):
-        for FLD in mapFields:
-            if mapFields[FLD] not in OGR_GEOMS:
-                # Check if field is foreign key
-                field_obj = djangoCls._meta.get_field(FLD)
-                
-                if not isinstance(field_obj, models.ForeignKey):
-                    setattr(modelObj, FLD, row[mapFields[FLD]])
-                
-                else:
-                    # If yes, use the model instance of the related table
-                    # Get model of the table related com aquela cujos dados
-                    # estao a ser restaurados
-                    related_name = field_obj.related_model.__name__
-                    
-                    related_model = __import('{a}.models.{m}'.format(
-                        a=APP_MODEL[0], m=related_model
-                    ))
-                    
-                    related_obj = related_model.objects.get(
-                        pk=int(row[mapFields[FLD]])
-                    )
-                    
-                    setattr(modelObj, FLD, related_obj)
-            
-            else:
-                setattr(modelObj, FLD, GEOSGeometry(
-                    row.geometry.wkt, srid=epsg
-                ))
+    if useLyrMap:
+        from django.contrib.gis.utils import LayerMapping
         
-        modelObj.save()
+        lm = LayerMapping(djangoCls, fileShape, mapFields)
+        
+        lm.save(strict=True, verbose=False)
     
-    inDf.apply(lambda x: updateModel(x), axis=1)
+    else:
+        from django.contrib.gis.geos import GEOSGeometry
+        from django.contrib.gis.db   import models
+        from gasp.fm.shp             import shp_to_df
+        
+        inDf = shp_to_df(inShp)
+        
+        modelObj = djangoCls()
+        
+        OGR_GEOMS = ['POLYGON', 'MULTIPOLYGON', 'MULTILINESTRING',
+                     'LINESTRING', 'POINT', 'MULTIPOINT']
+        
+        def updateModel(row):
+            for FLD in mapFields:
+                if mapFields[FLD] not in OGR_GEOMS:
+                    # Check if field is foreign key
+                    field_obj = djangoCls._meta.get_field(FLD)
+                
+                    if not isinstance(field_obj, models.ForeignKey):
+                        setattr(modelObj, FLD, row[mapFields[FLD]])
+                
+                    else:
+                        # If yes, use the model instance of the related table
+                        # Get model of the table related com aquela cujos dados
+                        # estao a ser restaurados
+                        related_name = field_obj.related_model.__name__
+                    
+                        related_model = __import('{a}.models.{m}'.format(
+                            a=APP_MODEL[0], m=related_name
+                        ))
+                    
+                        related_obj = related_model.objects.get(
+                            pk=int(row[mapFields[FLD]])
+                        )
+                    
+                        setattr(modelObj, FLD, related_obj)
+            
+                else:
+                    setattr(modelObj, FLD, GEOSGeometry(
+                        row.geometry.wkt, srid=epsg
+                    ))
+        
+            modelObj.save()
+        
+        inDf.apply(lambda x: updateModel(x), axis=1)
 
 
 def txt_to_db(txt, proj_path=None, delimiter='\t', encoding_='utf-8'):
@@ -276,32 +262,38 @@ def psql_to_djgDb(sql_file, tmp_db_name, path_djgProj=None, psql_con={
     
     psql_con["DATABASE"] = tmp_db_name
     # List tables in the database
-    tables = lst_tbl(psql_con)
-    
-    data_tables = []
-    for table in tables:
-        if table.startswith('auth') or table.startswith('django') \
-           or table in TABLES_TO_EXCLUDE:
-            continue
-        else: data_tables.append(table)
-    
-    if 'auth_user' in tables:
-        data_tables.append('auth_user')
+    tables = lst_tbl(psql_con, excludeViews=True)
     
     # Open Django Project
     if path_djgProj:
         from gasp.djg import open_Django_Proj
         application = open_Django_Proj(path_djgProj)
     
-    from django.contrib.gis.db import models
+    # List models in project
+    from gasp.djg.mdl import lst_mdl_proj
+    appModels = lst_mdl_proj(path_djgProj, thereIsApp=True)
     
+    data_tables = []
+    for table in tables:
+        if table.startswith('auth') or table.startswith('django') \
+           or table in TABLES_TO_EXCLUDE:
+            continue
+        
+        elif table not in appModels:
+            continue
+        
+        else: data_tables.append(table)
+    
+    if 'auth_user' in tables:
+        data_tables.append('auth_user')
+    
+    from django.contrib.gis.db import models
     orderned_table = order_models_by_relation(data_tables)
     
     for table in orderned_table:
         # Map pgsql table data
         # TODO: table could not be in the restore db
-        tableData = pgtable_to_dict(table, psql_con,
-                                    sanitizeColsName=False)
+        tableData = pgtable_to_dict(table, psql_con)
         
         # Table data to Django Model
         if table in SPECIAL_TABLES:
@@ -323,7 +315,10 @@ def psql_to_djgDb(sql_file, tmp_db_name, path_djgProj=None, psql_con={
                 
                 if not isinstance(field_obj, models.ForeignKey):
                     # If not, use the value
-                    setattr(__model, col, row[col])
+                    setattr(
+                        __model, col,
+                        row[col] if type(row[col]) != long else int(row[col])
+                    )
                 
                 else:
                     # If yes, use the model instance of the related table

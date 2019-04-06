@@ -36,7 +36,6 @@ def list_djg_apps(path_to_django_proj):
     """
     
     import os
-    
     from gasp.oss import list_folders_subfiles
     
     # Get project name

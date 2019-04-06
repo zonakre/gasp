@@ -150,6 +150,31 @@ def update_model(model, data):
         __model.save()
 
 
+def lst_mdl_proj(path, thereIsApp=None):
+    """
+    List Django Models in Project
+    """
+    
+    if not thereIsApp:
+        from gasp.djg import open_Django_Proj
+        
+        application = open_Django_Proj(path)
+    
+    from gasp.djg import list_djg_apps
+    
+    lst_apps = list_djg_apps(path)
+    
+    from django.apps import apps
+    
+    mlds = []
+    for __app in lst_apps:
+        mdl = apps.get_app_config(__app).models
+        
+        mlds += ["{}_{}".format(__app, k) for k in mdl]
+    
+    return mlds
+
+
 """
 *******************************************************************************
 ******************************* EXPERIENCES ***********************************
