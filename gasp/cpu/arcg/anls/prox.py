@@ -18,41 +18,6 @@ def geom_to_buffer(geometry, buf_distance):
     return geometry[0] if len(geometry) == 1 else geometry
 
 
-def Buffer(inShp, outBuf, bf_dist_or_field, dissolve="NONE", dissolveField=None):
-    """
-    Creates buffer polygons around input features to a specified distance.
-    """
-    
-    arcpy.Buffer_analysis(
-        in_features=inShp,
-        out_feature_class=outBuf, 
-        buffer_distance_or_field=bf_dist_or_field, 
-        line_side="FULL",
-        line_end_type="ROUND",
-        dissolve_option=dissolve,
-        dissolve_field=dissolveField,
-        method="PLANAR"
-    )
-    
-    return outBuf
-
-
-def buffer_shpFolder(inFolder, outFolder, dist_or_field, fc_format='.shp'):
-    """
-    Create buffer polygons for all shp in one folder
-    """
-    
-    import os
-    from gasp.oss import list_files
-    
-    lst_fc = list_files(inFolder, file_format=fc_format)
-    
-    for fc in lst_fc:
-        Buffer(
-            fc, os.path.join(outFolder, os.path.basename(fc)), dist_or_field
-        )
-
-
 def dist_bet_same_points_different_featcls(pntA, pntB, attrA, attrB,
                                            distField='distance'):
     """

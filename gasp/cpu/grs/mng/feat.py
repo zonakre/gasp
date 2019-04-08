@@ -80,7 +80,7 @@ def geomattr_to_db(shp, attrCol, attr, geomType, createCol=True,
     attrCol = goToList(attrCol)
     
     if createCol:
-        from gasp.cpu.grs.mng.tbl import add_field
+        from gasp.mng.grstbl import add_field
         
         for c in attrCol:
             add_field(shp, c, "DOUBLE PRECISION", asCMD=ascmd) 

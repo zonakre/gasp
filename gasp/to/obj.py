@@ -58,26 +58,3 @@ def obj_to_geodf(d, geom, epsg):
         geometry=geom
     )
 
-def dict_to_geodf(d, geom, epsg):
-    """
-    Dict to GeoDataframe
-    """
-    
-    from pandas       import DataFrame
-    from gasp.cpu.pnd import regulardf_to_geodf
-    
-    df = DataFrame.from_dict(d, orient='index')
-    
-    return regulardf_to_geodf(df, colGeom=geom, epsg=epsg)
-
-def json_obj_to_geodf(json_obj, epsg):
-    """
-    Json Object to GeoDataFrame
-    """
-    
-    from geopandas import GeoDataFrame
-    
-    return GeoDataFrame.from_features(json_obj['features'], {
-        'init' : 'epsg:{}'.format(epsg)
-    })
-

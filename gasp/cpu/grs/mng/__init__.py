@@ -36,29 +36,3 @@ def category(inShp, outShp, useOption, LyrN="1",
     
     return outShp
 
-
-def composite(bndRed, bndGreen, bndBlue, outrst, ascmd=None):
-    """
-    r.composite - Combines red, green and blue raster maps into
-    a single composite raster map.
-    """
-    
-    if not ascmd:
-        from grass.pygrass.modules import Module
-        
-        rcom = Module(
-            "r.composite", red=bndRed, green=bndGreen, blue=bndBlue,
-            output=outrst, overwrite=True, run_=False
-        )
-        
-        rcom()
-    
-    else:
-        from gasp import exec_cmd
-        
-        rcmd = exec_cmd((
-            "r.composite red={} green={} blue={} output={} --overwrite"
-        ).format(bndRed, bndGreen, bndBlue, outrst))
-    
-    return outrst
-

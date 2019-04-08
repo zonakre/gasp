@@ -18,19 +18,21 @@ def round_table_values(table, decimal_by_col_file, outputFile):
     """
     
     from gasp.cpu.arcg.lyr     import feat_lyr
-    from gasp.cpu.arcg.mng.gen import copy_features
+    from gasp.mng.gen          import copy_feat
     from gasp.cpu.arcg.mng.fld import type_fields
-    from gasp.fm.xls           import xls_to_dict
+    from gasp.fm               import tbl_to_obj
     
     arcpy.env.overwriteOutput = True
     
     # Get number of decimal places for the values of each column
-    places_by_col = xls_to_dict(decimal_by_col_file, sheet=0)
+    places_by_col = tbl_to_obj(
+        decimal_by_col_file, sheet=0, output='dict', useFirstColAsIndex=True
+    )
     
     PLACES_FIELD = places_by_col[places_by_col.keys()[0]].keys()[0]
     
     # Copy table
-    outTable = copy_features(table, outputFile)
+    outTable = copy_feat(table, outputFile, gisApi='arcpy')
     
     # Edit copy putting the correct decimal places in each column
     lyr = feat_lyr(outTable)

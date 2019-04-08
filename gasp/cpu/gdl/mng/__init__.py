@@ -1,3 +1,0 @@
-"""
-OGR Data management tools
-"""

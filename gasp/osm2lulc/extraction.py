@@ -17,13 +17,13 @@ def get_unused_data_on_lulcp(pbf, pgsql_data, out_work, nomenclature,
 
 
     import os
-    from gasp.cpu.psql         import run_sql_file
-    from gasp.cpu.psql.mng     import create_db
-    from gasp.fm.psql          import sql_query
-    from gasp.cpu.psql.mng.fld import cols_name
-    from gasp.cpu.psql.pgkeys  import create_pk
-    from gasp.to.shp           import psql_to_shp
-    from gasp.to.psql          import osm_to_pgsql
+    from gasp.sql         import run_sql_file
+    from gasp.sql.mng.db  import create_db
+    from gasp.fm.sql      import query_to_df
+    from gasp.sql.mng.fld import cols_name
+    from gasp.sql.k       import create_pk
+    from gasp.to.shp      import psql_to_shp
+    from gasp.to.psql     import osm_to_pgsql
     # TODO: replace postgis
     from gasp.postgis.analysis import new_geom_table
 
@@ -76,15 +76,15 @@ def get_unused_data_on_lulcp(pbf, pgsql_data, out_work, nomenclature,
     )
     # 1. Obtain data used on OSM2LULC procedure
     # 1.1 Get key and value for osm features
-    id_related_with = [x[0] for x in sql_query(
+    id_related_with = [x[0] for x in query_to_df(
         dicPostgre,
-        "SELECT {fid} FROM {t}".format(t=tbl_relation, fid=id_osm)
-    )]
-    key_value = {x[0]: [x[1], x[2]] for x in sql_query(
+        "SELECT {fid} FROM {t}".format(t=tbl_relation, fid=id_osm), db_api='psql'
+    )[id_osm].tolist()]
+    key_value = {x[0]: [x[1], x[2]] for x in query_to_df(
         dicPostgre,
         "SELECT id, key, value FROM osm_features WHERE {s}".format(
             s=' OR '.join(['id={y}'.format(y=str(x)) for x in id_related_with])
-        ))}
+        ), db_api='psql').values.tolist()}
     # 1.2 Extract data with this combinations of keys and values
     for tbl in OsmData:
         # Create new primary key

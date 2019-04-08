@@ -90,7 +90,7 @@ def tar_compress_folder(tar_fld, tar_file):
 
 def zip_files(lst_files, zip_file):
     """
-    Unzip all files in the lst_files
+    Zip all files in the lst_files
     """
     
     import zipfile

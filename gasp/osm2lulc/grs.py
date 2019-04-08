@@ -20,10 +20,10 @@ def raster_based(osmdata, nomenclature, refRaster, lulcRst,
     # Gasp dependencies #
     # ************************************************************************ #
     from gasp.oss.ops            import create_folder
-    from gasp.cpu.gdl.mng.prj    import get_epsg_raster
-    from gasp.cpu.grs            import run_grass
+    from gasp.prop.rst           import get_epsg_raster
+    from gasp.session            import run_grass
     if roadsAPI == 'POSTGIS':
-        from gasp.cpu.psql.mng   import create_db
+        from gasp.sql.mng.db     import create_db
         from gasp.osm2lulc.utils import osm_to_pgsql
         from gasp.osm2lulc.mod2  import roads_sqdb
     else:
@@ -107,9 +107,9 @@ def raster_based(osmdata, nomenclature, refRaster, lulcRst,
     # ************************************************************************ #
     # IMPORT SOME GASP MODULES FOR GRASS GIS #
     # ************************************************************************ #
-    from gasp.to.rst.grs      import rst_to_grs, grs_to_rst
+    from gasp.to.rst          import rst_to_grs, grs_to_rst
     from gasp.cpu.grs.spanlst import mosaic_raster
-    from gasp.cpu.grs.conf    import rst_to_region
+    from gasp.prop.grs        import rst_to_region
     
     # ************************************************************************ #
     # SET GRASS GIS LOCATION EXTENT #
@@ -338,15 +338,15 @@ def vector_based(osmdata, nomenclature, refRaster, lulcShp,
     # GASP dependencies #
     # ************************************************************************ #
     from gasp.oss.ops           import create_folder
-    from gasp.cpu.gdl.mng.prj   import get_epsg_raster
-    from gasp.cpu.grs           import run_grass
+    from gasp.prop.rst          import get_epsg_raster
+    from gasp.session           import run_grass
     if RoadsAPI == 'POSTGIS':
-        from gasp.cpu.psql.mng   import create_db
+        from gasp.sql.mng.db     import create_db
         from gasp.osm2lulc.utils import osm_to_pgsql
     else:
         from gasp.osm2lulc.utils import osm_to_sqdb
     from gasp.osm2lulc.utils     import osm_project, add_lulc_to_osmfeat
-    from gasp.cpu.pnd.mng.gen    import merge_shp
+    from gasp.mng.gen            import merge_feat
     from gasp.osm2lulc.mod1      import grs_vector
     if RoadsAPI == 'SQLITE' or RoadsAPI == 'POSTGIS':
         from gasp.osm2lulc.mod2  import roads_sqdb
@@ -428,12 +428,12 @@ def vector_based(osmdata, nomenclature, refRaster, lulcShp,
     # ************************************************************************ #
     # IMPORT SOME GASP MODULES FOR GRASS GIS #
     # ************************************************************************ #
-    from gasp.cpu.grs.anls.ovlay import erase
-    from gasp.cpu.grs.conf       import rst_to_region
-    from gasp.cpu.grs.mng.genze  import dissolve
-    from gasp.cpu.grs.mng.tbl    import add_and_update, reset_table
-    from gasp.to.shp.grs         import shp_to_grs, grs_to_shp
-    from gasp.to.rst.grs         import rst_to_grs
+    from gasp.anls.ovlay import erase
+    from gasp.prop.grs   import rst_to_region
+    from gasp.mng.genze  import dissolve
+    from gasp.mng.grstbl import add_and_update, reset_table
+    from gasp.to.shp.grs import shp_to_grs, grs_to_shp
+    from gasp.to.rst     import rst_to_grs
     # ************************************************************************ #
     # SET GRASS GIS LOCATION EXTENT #
     # ************************************************************************ #
@@ -524,7 +524,7 @@ def vector_based(osmdata, nomenclature, refRaster, lulcShp,
     Get Shps with all geometries related with one class - One Shape for Classe
     """
     
-    from gasp.cpu.pnd.mng import same_attr_to_shp
+    from gasp.mng.gen import same_attr_to_shp
     
     _osmShps = []
     for i in range(len(osmShps)):
@@ -572,7 +572,7 @@ def vector_based(osmdata, nomenclature, refRaster, lulcShp,
                     osmShps[__priorities[i]] = erase(
                         osmShps[__priorities[i]], osmShps[__priorities[e]],
                         "{}_{}".format(osmNameRef[__priorities[i]], e),
-                        asCMD=True, notTbl=True
+                        notTbl=True, api='pygrass'
                     )
     
     time_p = datetime.datetime.now().replace(microsecond=0)
@@ -589,7 +589,7 @@ def vector_based(osmdata, nomenclature, refRaster, lulcShp,
             )
         
         ds = dissolve(
-            osmShps[cls], 'dl_{}'.format(str(cls)), 'cls', asCMD=True)
+            osmShps[cls], 'dl_{}'.format(str(cls)), 'cls', api="grass")
         
         lst_merge.append(grs_to_shp(
             ds, os.path.join(workspace, "lulc_{}.shp".format(str(cls))),
@@ -598,7 +598,7 @@ def vector_based(osmdata, nomenclature, refRaster, lulcShp,
     
     time_q = datetime.datetime.now().replace(microsecond=0)
     
-    merge_shp(lst_merge, lulcShp)
+    merge_feat(lst_merge, lulcShp, api='pandas')
     
     time_r = datetime.datetime.now().replace(microsecond=0)
     

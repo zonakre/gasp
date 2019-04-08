@@ -25,14 +25,14 @@ def arcg_mean_time_WByPop(netDt, rdv, infraestruturas, unidades, conjuntos,
     
     import arcpy
     import os
-    from gasp.cpu.arcg.lyr              import feat_lyr
-    from gasp.cpu.arcg.mng.feat         import feat_to_pnt
-    from gasp.cpu.arcg.mng.fld          import add_field
-    from gasp.cpu.arcg.mng.fld          import calc_fld
-    from gasp.cpu.arcg.mng.joins        import join_table
-    from gasp.mng.genze                 import dissolve
-    from gasp.cpu.arcg.mng.gen          import copy_features
-    from gasp.cpu.arcg.netanlst.closest import closest_facility
+    from gasp.cpu.arcg.lyr       import feat_lyr
+    from gasp.cpu.arcg.mng.feat  import feat_to_pnt
+    from gasp.cpu.arcg.mng.fld   import add_field
+    from gasp.cpu.arcg.mng.fld   import calc_fld
+    from gasp.cpu.arcg.mng.joins import join_table
+    from gasp.mng.genze          import dissolve
+    from gasp.mng.gen            import copy_feat
+    from gasp.mob.arctbx.closest import closest_facility
     
     def get_freg_denominator(shp, groups, population, fld_time="Total_Minu"):
         cursor = arcpy.SearchCursor(shp)
@@ -58,9 +58,9 @@ def arcg_mean_time_WByPop(netDt, rdv, infraestruturas, unidades, conjuntos,
     
     # Start Procedure #
     # Create copy of statitic unities to preserve the original data
-    copy_unities = copy_features(
+    copy_unities = copy_feat(
         unidades,
-        os.path.join(w, os.path.basename(unidades))
+        os.path.join(w, os.path.basename(unidades)), gisApi='arcpy'
     )
     
     # Generate centroids of the statistic unities - unidades
@@ -115,14 +115,14 @@ def arcg_mean_time_WByPop2(netDt, rdv, infraestruturas, unidades, conjuntos,
     
     import arcpy
     import os
-    from gasp.cpu.arcg.lyr              import feat_lyr
-    from gasp.cpu.arcg.mng.feat         import feat_to_pnt
-    from gasp.cpu.arcg.mng.fld          import add_field, calc_fld
-    from gasp.cpu.arcg.mng.joins        import join_table
-    from gasp.mng.genze                 import dissolve
-    from gasp.cpu.arcg.mng.gen          import copy_features
-    from gasp.cpu.arcg.netanlst.closest import closest_facility
-    from gasp.fm.shp                    import shp_to_df
+    from gasp.cpu.arcg.lyr       import feat_lyr
+    from gasp.cpu.arcg.mng.feat  import feat_to_pnt
+    from gasp.cpu.arcg.mng.fld   import add_field, calc_fld
+    from gasp.cpu.arcg.mng.joins import join_table
+    from gasp.mng.genze          import dissolve
+    from gasp.mng.gen            import copy_feat
+    from gasp.mob.arctbx.closest import closest_facility
+    from gasp.fm                 import tbl_to_obj
     
     def get_freg_denominator(shp, groups, population, fld_time="Total_Minu"):
         cursor = arcpy.SearchCursor(shp)
@@ -152,9 +152,9 @@ def arcg_mean_time_WByPop2(netDt, rdv, infraestruturas, unidades, conjuntos,
     
     # Start Procedure #
     # Create copy of statitic unities to preserve the original data
-    copy_unities = copy_features(
+    copy_unities = copy_feat(
         unidades,
-        os.path.join(w, os.path.basename(unidades))
+        os.path.join(w, os.path.basename(unidades)), gisApi='arcpy'
     )
     
     # Generate centroids of the statistic unities - unidades
@@ -173,7 +173,7 @@ def arcg_mean_time_WByPop2(netDt, rdv, infraestruturas, unidades, conjuntos,
     
     # Calculo dos somatorios por freguesia (conjunto)
     # To GeoDf
-    unidadesDf = shp_to_df(copy_unities)
+    unidadesDf = tbl_to_obj(copy_unities)
     
     """
     groups = get_freg_denominator(lyr_unidades, conjuntos, popf)
@@ -221,7 +221,7 @@ def mean_time_by_influence_area(netDt, rdv, infraestruturas,
     from gasp.cpu.arcg.lyr              import feat_lyr
     from gasp.cpu.arcg.mng.feat         import feat_to_pnt
     from gasp.cpu.arcg.mng.gen          import merge
-    from gasp.cpu.arcg.mng.gen          import copy_features
+    from gasp.mng.gen                   import copy_feat
     from gasp.mng.genze                 import dissolve
     from gasp.cpu.arcg.mng.fld          import add_field
     from gasp.cpu.arcg.mng.fld          import calc_fld
@@ -254,9 +254,9 @@ def mean_time_by_influence_area(netDt, rdv, infraestruturas,
     arcpy.env.workspace = w
     
     # Procedure #
-    copy_unities = copy_features(
+    copy_unities = copy_feat(
         unidades,
-        os.path.join(w, os.path.basename(unidades))
+        os.path.join(w, os.path.basename(unidades)), gisApi='arcpy'
     )
     
     # Generate centroids of the statistic unities - unidades
@@ -340,12 +340,12 @@ def pop_less_dist_x(
     menos de x minutos de qualquer coisa
     """
     
-    import arcpy;                      import os
-    from gasp.cpu.arcg.lyr             import feat_lyr
-    from gasp.mng.genze                import dissolve
-    from gasp.cpu.arcg.anls.ovlay      import intersect
-    from gasp.cpu.arcg.mng.fld         import add_field
-    from gasp.cpu.arcg.netanlst.svarea import service_area_polygon
+    import arcpy;                 import os
+    from gasp.cpu.arcg.lyr        import feat_lyr
+    from gasp.mng.genze           import dissolve
+    from gasp.cpu.arcg.anls.ovlay import intersect
+    from gasp.cpu.arcg.mng.fld    import add_field
+    from gasp.mob.arctbx.svarea   import service_area_polygon
     
     def GetUnitiesIntersected(shpintersected, shpUnities):
         # AND IF SHPUNITIES HAS LESS THAN 6 CHARACTERS
@@ -433,15 +433,15 @@ def pop_less_dist_x2(net_dataset, rdv_name, locations, interval,
     """
     
     import arcpy; import numpy; import os; import pandas
-    from gasp.cpu.arcg.lyr             import feat_lyr
-    from gasp.mng.genze                import dissolve
-    from gasp.cpu.arcg.anls.ovlay      import intersect
-    from gasp.cpu.arcg.mng.fld         import calc_fld
-    from gasp.cpu.arcg.netanlst.svarea import service_area_polygon
-    from gasp.fm.shp                   import shp_to_df
-    from gasp.oss                      import get_filename
-    from gasp.to.shp                   import df_to_shp
-    from gasp.cpu.arcg.mng.fld         import del_field
+    from gasp.cpu.arcg.lyr        import feat_lyr
+    from gasp.mng.genze           import dissolve
+    from gasp.cpu.arcg.anls.ovlay import intersect
+    from gasp.cpu.arcg.mng.fld    import calc_fld
+    from gasp.mob.arctbx.svarea   import service_area_polygon
+    from gasp.fm                  import tbl_to_obj
+    from gasp.oss                 import get_filename
+    from gasp.to.shp              import df_to_shp
+    from gasp.cpu.arcg.mng.fld    import del_field
     
     if arcpy.CheckExtension("Network") == "Available":
         arcpy.CheckOutExtension("Network")
@@ -468,12 +468,12 @@ def pop_less_dist_x2(net_dataset, rdv_name, locations, interval,
     
     # In the original Unities SHP, create a col with the population
     # only for the unities intersected with service area
-    intersectDf = shp_to_df(unities_servarea)
+    intersectDf = tbl_to_obj(unities_servarea)
     
     unities_less_than = intersectDf[fld_pop].unique()
     unities_less_than = pandas.DataFrame(unities_less_than, columns=['cod_'])
     
-    popDf = shp_to_df(unities)
+    popDf = tbl_to_obj(unities)
     popDf = popDf.merge(
         unities_less_than, how='outer',
         left_on=fld_pop, right_on="cod_"
@@ -533,15 +533,15 @@ def mean_time_in_povoated_areas(network, rdv_name, stat_units, popFld,
     """
     
     import os; import arcpy
-    from gasp.cpu.arcg.lyr              import feat_lyr
-    from gasp.cpu.arcg.anls.exct        import select_by_attr
-    from gasp.cpu.arcg.mng.fld          import field_statistics
-    from gasp.cpu.arcg.mng.fld          import add_field
-    from gasp.cpu.arcg.mng.gen          import merge
-    from gasp.cpu.arcg.mng.gen          import copy_features
-    from gasp.cpu.arcg.netanlst.closest import closest_facility
-    from gasp.to.shp.arcg               import rst_to_pnt
-    from gasp.to.rst.arcg               import shp_to_raster
+    from gasp.cpu.arcg.lyr       import feat_lyr
+    from gasp.cpu.arcg.anls.exct import select_by_attr
+    from gasp.cpu.arcg.mng.fld   import field_statistics
+    from gasp.cpu.arcg.mng.fld   import add_field
+    from gasp.cpu.arcg.mng.gen   import merge
+    from gasp.mng.gen            import copy_feat
+    from gasp.mob.arctbx.closest import closest_facility
+    from gasp.to.shp.arcg        import rst_to_pnt
+    from gasp.to.rst             import shp_to_raster
     
     if arcpy.CheckExtension("Network") == "Available":
         arcpy.CheckOutExtension("Network")
@@ -554,8 +554,9 @@ def mean_time_in_povoated_areas(network, rdv_name, stat_units, popFld,
     WORK = workspace
     
     # Add field
-    stat_units = copy_features(
-        stat_units, os.path.join(WORK, os.path.basename(stat_units))
+    stat_units = copy_feat(
+        stat_units, os.path.join(WORK, os.path.basename(stat_units)),
+        gisApi='arcpy'
     )
     add_field(stat_units, "TIME", "DOUBLE", "10", precision="3")
     
@@ -581,9 +582,8 @@ def mean_time_in_povoated_areas(network, rdv_name, stat_units, popFld,
         
         # Convert to raster
         rst_unity = shp_to_raster(
-            unity, "FID",
-            os.path.join(WORK, 'unit_{}.tif'.format(str(FID))),
-            GRID_REF_CELLSIZE
+            unity, "FID", GRID_REF_CELLSIZE, None,
+            os.path.join(WORK, 'unit_{}.tif'.format(str(FID))), api='arcpy'
         )
         
         # Convert to point
@@ -631,18 +631,18 @@ def population_within_point_buffer(netDataset, rdvName, pointShp, populationShp,
     """
     
     import arcpy; import os
-    from geopandas                     import GeoDataFrame
-    from gasp.cpu.arcg.lyr             import feat_lyr
-    from gasp.cpu.arcg.anls.ovlay      import intersect
-    from gasp.cpu.arcg.mng.gen         import copy_features
-    from gasp.cpu.arcg.mng.fld         import add_geom_attr
-    from gasp.cpu.arcg.mng.fld         import add_field
-    from gasp.cpu.arcg.mng.fld         import calc_fld
-    from gasp.mng.genze                import dissolve
-    from gasp.cpu.arcg.netanlst.svarea import service_area_use_meters
-    from gasp.cpu.arcg.netanlst.svarea import service_area_polygon
-    from gasp.fm.shp                   import shp_to_df
-    from gasp.to.shp                   import df_to_shp
+    from geopandas                import GeoDataFrame
+    from gasp.cpu.arcg.lyr        import feat_lyr
+    from gasp.cpu.arcg.anls.ovlay import intersect
+    from gasp.mng.gen             import copy_feat
+    from gasp.cpu.arcg.mng.fld    import add_geom_attr
+    from gasp.cpu.arcg.mng.fld    import add_field
+    from gasp.cpu.arcg.mng.fld    import calc_fld
+    from gasp.mng.genze           import dissolve
+    from gasp.mob.arctbx.svarea   import service_area_use_meters
+    from gasp.mob.arctbx.svarea   import service_area_polygon
+    from gasp.fm                  import tbl_to_obj
+    from gasp.to.shp              import df_to_shp
     
     workspace = os.path.dirname(pointShp) if not workspace else workspace
     
@@ -651,9 +651,9 @@ def population_within_point_buffer(netDataset, rdvName, pointShp, populationShp,
         workspace = create_folder(workspace, overwrite=False)
     
     # Copy population layer
-    populationShp = copy_features(populationShp, os.path.join(
+    populationShp = copy_feat(populationShp, os.path.join(
         workspace, 'cop_{}'.format(os.path.basename(populationShp))
-    ))
+    ), gisApi='arcpy')
     
     # Create layer
     pntLyr = feat_lyr(pointShp)
@@ -710,8 +710,8 @@ def population_within_point_buffer(netDataset, rdvName, pointShp, populationShp,
         {"TYPE" : "INTEGER", "LENGTH" : "5", "PRECISION" : None}
     )
     
-    dfPnt  = shp_to_df(pointShp)
-    dfDiss = shp_to_df(diss)
+    dfPnt  = tbl_to_obj(pointShp)
+    dfDiss = tbl_to_obj(diss)
     
     dfDiss.rename(columns={"SUM_popula": "n_pessoas"}, inplace=True)
     
@@ -746,14 +746,14 @@ def gdl_mean_time_wByPop(unities, unities_groups, population_field,
     """
     
     import os
-    from osgeo                   import ogr
-    from gasp.prop.ff            import drv_name
-    from gasp.fm.shp             import points_to_list
-    from gasp.cpu.gdl.mng.feat   import feat_to_pnt
-    from gasp.cpu.gdl.mng.prj    import project_geom
-    from gasp.cpu.gdl.mng.fld    import add_fields
-    from gasp.cpu.gdl.mng.genze  import ogr_dissolve
-    from gasp.cpu.glg.directions import get_time_pnt_destinations
+    from osgeo               import ogr
+    from gasp.prop.ff        import drv_name
+    from gasp.fm             import points_to_list
+    from gasp.mng.feat       import feat_to_pnt
+    from gasp.mng.prj        import project_geom
+    from gasp.mng.fld        import add_fields
+    from gasp.mng.genze      import dissolve
+    from gasp.web.glg.direct import get_time_pnt_destinations
     
     workspace = workspace if workspace else \
         os.path.dirname(output)
@@ -793,7 +793,7 @@ def gdl_mean_time_wByPop(unities, unities_groups, population_field,
         if unities_epsg == 4326:
             originGeom = geom
         else:
-            originGeom = project_geom(geom, unities_epsg, 4326)
+            originGeom = project_geom(geom, unities_epsg, 4326, api='ogr')
         
         _id, duration, distance = get_time_pnt_destinations(
             originGeom, lst_destinies
@@ -834,7 +834,8 @@ def gdl_mean_time_wByPop(unities, unities_groups, population_field,
     polyUnit.Destroy()
     pntUnit.Destroy()
     
-    ogr_dissolve(
-        unities, unities_groups, output,
-        field_statistics={'meantime': 'SUM'}
+    dissolve(
+        unities, output, unities_groups,
+        statistics={'meantime': 'SUM'}, api='ogr'
     )
+

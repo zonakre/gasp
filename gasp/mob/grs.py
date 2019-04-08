@@ -15,7 +15,7 @@ def cost_surface(dem, lulc, cls_lulc, prod_lulc, roads, kph, barr,
     
     from gasp.oss.ops  import create_folder
     from gasp.os       import os_name
-    from gasp.cpu.grs  import run_grass
+    from gasp.session  import run_grass
     from gasp.prop.rst import get_cellsize
     from gasp.prop.rst import rst_distinct
     
@@ -101,18 +101,19 @@ def cost_surface(dem, lulc, cls_lulc, prod_lulc, roads, kph, barr,
     
     # Import GRASS GIS Modules
     from gasp.cpu.grs              import grass_converter
-    from gasp.cpu.grs.spanlst.surf import slope
-    from gasp.cpu.grs.spanlst.rcls import reclassify
-    from gasp.cpu.grs.spanlst.rcls import interval_rules
-    from gasp.cpu.grs.spanlst.rcls import category_rules
-    from gasp.cpu.grs.spanlst.rcls import grass_set_null
-    from gasp.cpu.grs.mng.tbl      import add_field, update_table
+    from gasp.spanlst.surf import slope
+    from gasp.spanlst.rcls import reclassify
+    from gasp.spanlst.rcls import interval_rules
+    from gasp.spanlst.rcls import category_rules
+    from gasp.spanlst.rcls import grass_set_null
+    from gasp.mng.grstbl           import add_field, update_table
     from gasp.anls.ovlay           import union
-    from gasp.to.rst.grs           import shp_to_raster, rst_to_grs, grs_to_rst
+    from gasp.to.rst               import rst_to_grs, grs_to_rst
+    from gasp.to.rst               import shp_to_raster
     from gasp.to.shp.grs           import shp_to_grs
     from gasp.cpu.grs.spanlst      import mosaic_raster
-    from gasp.cpu.grs.spanlst      import combine
-    from gasp.cpu.grs.spanlst      import mapcalc
+    from gasp.spanlst.local      import combine
+    from gasp.spanlst.algebra      import rstcalc
     from gasp.cpu.grs.spanlst      import raster_report  
     
     """Global variables"""
@@ -129,7 +130,7 @@ def cost_surface(dem, lulc, cls_lulc, prod_lulc, roads, kph, barr,
     """Make Cost Surface"""
     # Generate slope raster
     rst_to_grs(dem, 'dem')
-    slope('dem', 'rst_slope')
+    slope('dem', 'rst_slope', api="pygrass")
     
     # Reclassify Slope
     rulesSlope = interval_rules(slope_cls, os.path.join(wTmp, 'slope.txt'))
@@ -140,7 +141,9 @@ def cost_surface(dem, lulc, cls_lulc, prod_lulc, roads, kph, barr,
     shp_to_grs(barr, 'barriers')
     union(lulc_shp['shp'], 'barriers', 'barrcos', api_gis="grass")
     update_table('barrcos', 'a_' + lulc_shp['fld'], 99, 'b_cat=1')
-    shp_to_raster('barrcos', 'rst_barrcos', 'a_' + lulc_shp['fld'], 'area')
+    shp_to_raster(
+        'barrcos', 'a_' + lulc_shp['fld'], None, None, 'rst_barrcos',
+        api='pygrass')
     
     # Reclassify this raster - convert the values 99 to NULL or NODATA
     grass_set_null('rst_barrcos', 99)
@@ -150,15 +153,15 @@ def cost_surface(dem, lulc, cls_lulc, prod_lulc, roads, kph, barr,
     if kph == 'pedestrian':
         add_field('rdv', 'foot', 'INT')
         update_table('rdv', 'foot', 50, 'foot IS NULL')
-        shp_to_raster('rdv', 'rst_rdv', 'foot', 'line')
+        shp_to_raster('rdv', 'foot', None, None, 'rst_rdv', api='pygrass')
     else:
-        shp_to_raster('rdv', 'rst_rdv', kph, 'line')
+        shp_to_raster('rdv', kph, None, None, 'rst_rdv', api='pygrass')
     
     # Merge LULC/BARR and Roads
     mosaic_raster('rst_rdv', 'rst_barrcos', 'rdv_barrcos')
     
     # Combine LULC/BARR/ROADS with Slope
-    combine('recls_slope', 'rdv_barrcos', 'rst_combine')
+    combine('recls_slope', 'rdv_barrcos', 'rst_combine', api="pygrass")
     
     """
     Estimating cost for every combination at rst_combine
@@ -172,7 +175,7 @@ def cost_surface(dem, lulc, cls_lulc, prod_lulc, roads, kph, barr,
     # Reclassify combined rst
     rulesSurface = category_rules(cst, os.path.join('r_surface.txt'))
     reclassify('rst_combine', 'cst_tmp', rulesSurface)
-    mapcalc('cst_tmp / 10000000.0', 'cst_surface')
+    rstcalc('cst_tmp / 10000000.0', 'cst_surface', api='pygrass')
     grs_to_rst('cst_surface', output)
 
 
@@ -182,8 +185,9 @@ def acumulated_cost(cst_surface, dest_pnt, cst_dist):
     close destination
     """
     
-    from gasp.cpu.grs.spanlst import mapcalc, rcost
-    from gasp.to.rst.grs      import rst_to_grs, grs_to_rst
+    from gasp.spanlst.algebra import rstcalc
+    from gasp.spanlst.dist    import rcost
+    from gasp.to.rst          import rst_to_grs, grs_to_rst
     from gasp.to.shp.grs      import shp_to_grs
     
     # Add Cost Surface to GRASS GIS
@@ -193,7 +197,7 @@ def acumulated_cost(cst_surface, dest_pnt, cst_dist):
     # Execute r.cost
     rcost('cst_surf', 'destination', 'cst_dist')
     # Convert to minutes
-    mapcalc('cst_dist / 60.0', 'CstDistMin')
+    rstcalc('cst_dist / 60.0', 'CstDistMin', api="grass")
     # Export result
     grs_to_rst('CstDistMin', cst_dist)
     
@@ -214,8 +218,11 @@ def cstDistance_with_motorway(
     
     from gasp.oss.ops          import create_folder
     from gasp.prop.ff          import drv_name
-    from gasp.cpu.grs.spanlst  import mapcalc, rcost, rseries
-    from gasp.to.rst.grs       import shp_to_raster, rst_to_grs
+    from gasp.cpu.grs.spanlst  import rseries
+    from gasp.spanlst.algebra import rstcalc
+    from gasp.spanlst.dist import rcost
+    from gasp.to.rst           import rst_to_grs
+    from gasp.to.rst           import shp_to_raster
     from gasp.cpu.gdl.sampling import gdal_values_to_points
     from pysage.tools_thru_api.gdal.ogr import OGR_CreateNewShape
     
@@ -271,12 +278,12 @@ def cstDistance_with_motorway(
     convert(motorway, 'rdv_prim', 'None')
     
     # We need a cost surface only with the cost of motorway roads
-    shp_to_raster('rdv_prim', 'rst_rdv', fld_motorway, 'line')
-    mapcalc(
+    shp_to_raster('rdv_prim', fld_motorway, None, None, 'rst_rdv', api='pygrass')
+    rstcalc(
         '(3600.0 * {cs}) / (rst_rdv * 1000.0)'.format(
             cs=get_cellsize(cst_surface, gisApi='gdal')
         ),
-        'cst_motorway'
+        'cst_motorway', api='grass'
     )
     
     # For each node of entrance into a motorway, we need to know:

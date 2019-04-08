@@ -13,14 +13,14 @@ def acost_surface(mdt, tax_cos, cos, leg_cos, barr, rdv, fldRdv, w, SupCst):
     
     import arcpy; import os;           import unicodedata
     from gasp.cpu.arcg.spanlst.rcls    import reclassify
-    from gasp.cpu.arcg.spanlst.surf    import slope
-    from gasp.cpu.arcg.spanlst.local   import Combine
+    from gasp.spanlst.surf             import slope
+    from gasp.spanlst.local            import combine
     from gasp.cpu.arcg.spanlst.rcls    import lookup
     from gasp.cpu.arcg.mng.fld         import add_field
     from gasp.cpu.arcg.mng.fld         import list_fields
     from gasp.cpu.arcg.mng.rst.dataset import mosaic_to_raster
     from gasp.anls.ovlay               import union
-    from gasp.to.rst.arcg              import shp_to_rasters
+    from gasp.to.rst                   import shp_to_raster
     
     def GetRules4Slope():
         r = {1 : [0, 10],
@@ -127,7 +127,7 @@ def acost_surface(mdt, tax_cos, cos, leg_cos, barr, rdv, fldRdv, w, SupCst):
     Make Cost Surface
     """
     # Create Slope Layer
-    declv = Slope(mdt, "declv.img", "PERCENT_RISE")
+    declv = slope(mdt, "declv.img", "PERCENT_RISE", api='arcpy')
     # Reclassify Slope Layer
     rcls_declv = Reclassify(declv, "Value", GetRules4Slope(), "rcls_declv.img", mdt)
     # Update LandUse Shapefile
@@ -168,7 +168,7 @@ def acost_surface(mdt, tax_cos, cos, leg_cos, barr, rdv, fldRdv, w, SupCst):
     # Reclass RDV: 0 to NODATA
     barrcosrdv = Reclassify(barrcosrdv, "Value", "0 NODATA", "barrcosrdv_v2.img", mdt)
     # Combine BARR/COS/RDV/SLOPE
-    combine = CombineRaster([barrcosrdv, declv], "combine.img")
+    combine = combine([barrcosrdv, declv], "combine.img", api='arcpy')
     # Calculate impedance for all combinations of categories
     fld_impedance = CalcImpedance(combine, tax_cos, cellsize)
     return LookupRaster(combine, fld_impedance, SupCst)

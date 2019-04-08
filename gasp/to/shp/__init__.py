@@ -105,12 +105,12 @@ def pointXls_to_shp(xlsFile, outShp, x_col, y_col, epsg, sheet=None):
     Excel table with Point information to ESRI Shapefile
     """
     
-    from gasp.fm.xls  import xls_to_df
-    from gasp.cpu.pnd import pnt_dfwxy_to_geodf
+    from gasp.fm      import tbl_to_obj
+    from gasp.to.geom import pnt_dfwxy_to_geodf
     from gasp.to.shp  import df_to_shp
     
     # XLS TO PANDAS DATAFRAME
-    dataDf = xls_to_df(xlsFile, sheet=sheet)
+    dataDf = tbl_to_obj(xlsFile, sheet=sheet)
     
     # DATAFRAME TO GEO DATAFRAME
     geoDataDf = pnt_dfwxy_to_geodf(dataDf, x_col, y_col, epsg)
@@ -132,8 +132,8 @@ def psql_to_shp(conParam, table, outshp, api='pandas',
     """
     
     if api == 'pandas':
-        from gasp.fm.psql import psql_to_geodf
-        from gasp.to.shp  import df_to_shp
+        from gasp.fm.sql import psql_to_geodf
+        from gasp.to.shp import df_to_shp
     
         q = "SELECT * FROM {}".format(table) if not tableIsQuery else table
     

@@ -146,12 +146,12 @@ def generate_obs_points_for_large_viewshed(INTEREST_RASTER, DEM, REF_CELLS,
     from gasp.cpu.arcg.mng.rst.proc import clip_raster_each_feat_class
     from gasp.cpu.arcg.spanlst.rcls import rcls_folderRaster
     from gasp.cpu.arcg.spanlst.surf import viewshed
-    from gasp.fm.shp                import shp_to_df
+    from gasp.fm                    import tbl_to_obj
     from gasp.oss                   import get_filename
     from gasp.oss.ops               import create_folder
-    from gasp.cpu.pnd.anls.exct     import split_shp_by_attr
-    from gasp.cpu.pnd.mng.ext       import buffer_extent
-    from gasp.cpu.pnd.mng.fld       import col_distinct
+    from gasp.anls.exct             import split_shp_by_attr
+    from gasp.mng.ext               import df_buffer_extent
+    from gasp.mng.fld.df            import col_distinct
     
     # Create workspaces to store data
     C_CELLS_FLD = os.path.join(OUT_FOLDER, 'cells')
@@ -197,7 +197,7 @@ def generate_obs_points_for_large_viewshed(INTEREST_RASTER, DEM, REF_CELLS,
     
         def split_cells(f, bf, of):
             if bf == "DEM":
-                _f = buffer_extent(
+                _f = df_buffer_extent(
                     f, SRS_EPSG, 10000, os.path.join(OUT_FOLDER, 'bf_cells.shp')
                 )
         
@@ -255,7 +255,7 @@ def generate_obs_points_for_large_viewshed(INTEREST_RASTER, DEM, REF_CELLS,
         Generate Viewsheds
         """
     
-        cellsDf = shp_to_df(REF_CELLS)
+        cellsDf = tbl_to_obj(REF_CELLS)
     
         LST_CELLS = col_distinct(cellsDf, ID_CELLS)
     
@@ -313,7 +313,7 @@ def viewshed_by_feat_class(inRaster, observerDataset, feat_class_folder,
     from gasp.oss.ops               import create_folder
     from gasp.prop.ff               import vector_formats, raster_formats
     from gasp.prop.rst              import get_cellsize, rst_distinct
-    from gasp.cpu.arcg.anls.prox    import Buffer
+    from gasp.anls.prox.bf          import _buffer
     from gasp.cpu.arcg.mng.rst.proc import clip_raster
     from gasp.cpu.arcg.spanlst.surf import viewshed
     from gasp.cpu.arcg.spanlst.rcls import reclassify
@@ -366,10 +366,10 @@ def viewshed_by_feat_class(inRaster, observerDataset, feat_class_folder,
     
     for fc in fclasses:
         # Create Buffer
-        fcBuffer = Buffer(
-            fc,
+        fcBuffer = _buffer(
+            fc, visibilityRadius,
             os.path.join(wTmp, os.path.basename(fc)),
-            visibilityRadius
+            api='arcpy'
         )
         # Clip inRaster
         clipInRst = clip_raster(
@@ -505,12 +505,12 @@ def viewshed_by_feat_class2(inRaster, observerDataset, feat_class_folder,
     from gasp.prop.rst              import get_cell_coord
     from gasp.prop.ext              import rst_ext
     from gasp.prop.rst              import rst_shape, rst_distinct, get_nodata, get_cellsize
-    from gasp.cpu.arcg.anls.prox    import Buffer
+    from gasp.anls.prox.bf          import _buffer
     from gasp.cpu.arcg.mng.rst.proc import clip_raster
     from gasp.cpu.arcg.spanlst.surf import viewshed
     from gasp.cpu.arcg.spanlst.rcls import reclassify
     from gasp.cpu.arcg._3D.view     import line_of_sight
-    from gasp.to.rst.arcg           import shp_to_raster
+    from gasp.to.rst                import shp_to_raster
     from gasp.to.rst.arcg           import array_to_raster
     from gasp.to.shp.arcg           import geomArray_to_fc
     from gasp.fm.rst                import toarray_varcmap as rst_to_array
@@ -568,10 +568,9 @@ def viewshed_by_feat_class2(inRaster, observerDataset, feat_class_folder,
     
     for fc in fclasses:
         # Create Buffer
-        fcBuffer = Buffer(
-            fc,
+        fcBuffer = _buffer(
+            fc, visibilityRadius,
             os.path.join(wTmp, os.path.basename(fc)),
-            visibilityRadius
         )
         
         # Clip inRaster
@@ -681,12 +680,11 @@ def viewshed_by_feat_class2(inRaster, observerDataset, feat_class_folder,
         # Calculate visibility
         # Boundary to raster
         boundRst = shp_to_raster(
-            fc, 'FID',
+            fc, 'FID', CELLSIZE, None,
             os.path.join(wTmp, '{}_{}'.format(
                 os.path.splitext(os.path.basename(fc))[0],
                 os.path.splitext(observerDataset)[1]
-            )), CELLSIZE, 
-            snap=clipInRst
+            )), snap=clipInRst, api='arcpy'
         )
         
         noDataVal = get_nodata(boundRst, gisApi='arcpy')

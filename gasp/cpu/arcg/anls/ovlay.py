@@ -54,16 +54,3 @@ def folderShp_Intersection(inFolder, intFeatures, outFolder):
             os.path.join(outFolder, os.path.basename(str(fc_infld[i])))
         )
 
-
-def erase(inFeat, eraseFeat, outFeat):
-    """
-    Run erase tool
-    """
-    
-    arcpy.Erase_analysis(
-        in_features=inFeat, erase_features=eraseFeat, 
-        out_feature_class=outFeat
-    )
-    
-    return outFeat
-

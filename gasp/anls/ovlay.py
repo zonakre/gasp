@@ -178,12 +178,12 @@ def optimized_union_anls(lyr_a, lyr_b, outShp, ref_boundary, epsg,
     """
     
     import os
-    from gasp.oss                import get_filename
-    from gasp.cpu.gdl.mng.sample import create_fishnet
-    from gasp.mng.feat           import eachfeat_to_newshp
-    from gasp.mng.gen            import merge_feat
-    from gasp.cpu.grs            import run_grass
-    from gasp.anls.exct          import split_shp_by_attr
+    from gasp.oss        import get_filename
+    from gasp.mng.sample import create_fishnet
+    from gasp.mng.feat   import eachfeat_to_newshp
+    from gasp.mng.gen    import merge_feat
+    from gasp.session    import run_grass
+    from gasp.anls.exct  import split_shp_by_attr
     
     if workspace:
         if not os.path.exists(workspace):
@@ -293,6 +293,70 @@ def optimized_union_anls(lyr_a, lyr_b, outShp, ref_boundary, epsg,
     return outShp
 
 
+def intersection(inShp, intersectShp, outShp, api='geopandas'):
+    """
+    Intersection between ESRI Shapefile
+    
+    'API's Available:
+    * geopandas
+    * saga;
+    * pygrass
+    """
+    
+    if api == 'geopandas':
+        import geopandas
+    
+        from gasp.fm     import tbl_to_obj
+        from gasp.to.shp import df_to_shp
+    
+        dfShp       = tbl_to_obj(inShp)
+        dfIntersect = tbl_to_obj(intersectShp)
+    
+        res_interse = geopandas.overlay(dfShp, dfIntersect, how='intersection')
+    
+        df_to_shp(res_interse, outShp)
+    
+    elif api == 'saga':
+        from gasp import exec_cmd
+        
+        cmdout = exec_cmd((
+            "saga_cmd shapes_polygons 14 -A {} -B {} -RESULT {} -SPLIT 1"
+        ).format(inShp, intersectShp, outShp))
+    
+    elif api == 'pygrass':
+        from grass.pygrass.modules import Module
+        
+        clip = Module(
+            "v.overlay", ainput=inShp, atype="area",
+            binput=intersectShp, btype="area", operator="and",
+            output=outShp,  overwrite=True, run_=False, quiet=True
+        )
+        
+        clip()
+        
+    else:
+        raise ValueError("{} is not available!".format(api))
+    
+    return outShp
+
+
+def self_intersection(polygons, output):
+    """
+    Create a result with the self intersections
+    """
+    
+    from gasp import exec_cmd
+    
+    cmd = (
+        'saga_cmd shapes_polygons 12 -POLYGONS {in_poly} -INTERSECT '
+        '{out}'
+    ).format(in_poly=polygons, out=output)
+    
+    outcmd = exec_cmd(cmd)
+    
+    return output
+
+
 def check_shape_diff(SHAPES_TO_COMPARE, OUT_FOLDER, REPORT, conPARAM, DB, SRS_CODE,
                      GIS_SOFTWARE="GRASS", GRASS_REGION_TEMPLATE=None):
     """
@@ -316,18 +380,19 @@ def check_shape_diff(SHAPES_TO_COMPARE, OUT_FOLDER, REPORT, conPARAM, DB, SRS_CO
     """
     
     import datetime
-    import os;                    import pandas
-    from gasp.fm.psql             import query_to_df
-    from gasp.cpu.psql.mng        import create_db, tbls_to_tbl
-    from gasp.cpu.psql.mng.geom   import fix_geom, check_geomtype_in_table
-    from gasp.cpu.psql.mng.geom   import select_main_geom_type
-    from gasp.cpu.psql.mng.qw     import ntbl_by_query
-    from gasp.prop.ff             import check_isRaster
-    from gasp.oss                 import get_filename
-    from gasp.to.psql             import shp_to_psql_tbl, df_to_pgsql
-    from gasp.to.shp              import rst_to_polyg
-    from gasp.to.shp              import shp_to_shp, psql_to_shp
-    from gasp.to.xls              import psql_to_xls
+    import os;             import pandas
+    from gasp.fm.sql       import query_to_df
+    from gasp.sql.mng.tbl  import tbls_to_tbl
+    from gasp.sql.mng.geom import fix_geom, check_geomtype_in_table
+    from gasp.sql.mng.geom import select_main_geom_type
+    from gasp.sql.mng.qw   import ntbl_by_query
+    from gasp.prop.ff      import check_isRaster
+    from gasp.oss          import get_filename
+    from gasp.sql.mng.db   import create_db
+    from gasp.to.sql       import shp_to_psql, df_to_db
+    from gasp.to.shp       import rst_to_polyg
+    from gasp.to.shp       import shp_to_shp, psql_to_shp
+    from gasp.to           import db_to_tbl
     
     # Check if folder exists, if not create it
     if not os.path.exists(OUT_FOLDER):
@@ -343,7 +408,7 @@ def check_shape_diff(SHAPES_TO_COMPARE, OUT_FOLDER, REPORT, conPARAM, DB, SRS_CO
                 'To use GRASS GIS you need to specify GRASS_REGION_TEMPLATE'
             )
         
-        from gasp.cpu.grs import run_grass
+        from gasp.session import run_grass
         
         gbase = run_grass(
             OUT_FOLDER, grassBIN='grass76', location='shpdif',
@@ -355,10 +420,10 @@ def check_shape_diff(SHAPES_TO_COMPARE, OUT_FOLDER, REPORT, conPARAM, DB, SRS_CO
         
         gsetup.init(gbase, OUT_FOLDER, 'shpdif', 'PERMANENT')
         
-        from gasp.cpu.grs.mng.tbl import rename_col
-        from gasp.to.shp.grs      import shp_to_grs, grs_to_shp
-        from gasp.to.rst.grs      import rst_to_grs
-        from gasp.mng.fld         import rename_column
+        from gasp.mng.grstbl import rename_col
+        from gasp.to.shp.grs import shp_to_grs, grs_to_shp
+        from gasp.to.rst     import rst_to_grs
+        from gasp.mng.fld    import rename_column
     
     # Convert to SHAPE if file is Raster
     # Import to GRASS GIS if GIS SOFTWARE == GRASS
@@ -459,7 +524,7 @@ def check_shape_diff(SHAPES_TO_COMPARE, OUT_FOLDER, REPORT, conPARAM, DB, SRS_CO
     
     def fix_geometry(shp):
         # Send data to PostgreSQL
-        nt = shp_to_psql_tbl(conPARAM, shp, SRS_CODE, api='shp2pgsql')
+        nt = shp_to_psql(conPARAM, shp, SRS_CODE, api='shp2pgsql')
     
         # Fix data
         corr_tbl = fix_geom(
@@ -510,24 +575,6 @@ def check_shape_diff(SHAPES_TO_COMPARE, OUT_FOLDER, REPORT, conPARAM, DB, SRS_CO
                     ), api_gis="arcpy")
             
             elif GIS_SOFTWARE == "GRASS":
-                """
-                __unShp = union(
-                    SHPS[i], SHPS[e], "un_{}_{}".format(i, e),
-                    api_gis="grass_cmd"
-                )
-                
-                rename_col(
-                    __unShp, "a_" + __SHAPES_TO_COMPARE[SHPS[i]],
-                    __SHAPES_TO_COMPARE[SHPS[i]], as_cmd=True
-                ); rename_col(
-                    __unShp, "b_" + __SHAPES_TO_COMPARE[SHPS[e]],
-                    __SHAPES_TO_COMPARE[SHPS[e]], as_cmd=True
-                )
-                
-                unShp = grs_to_shp(__unShp, os.path.join(
-                    OUT_FOLDER, __unShp + ".shp"), "area")
-                """
-                
                 # Optimized Union
                 print "Union between {} and {}".format(SHPS[i], SHPS[e])
                 time_a = datetime.datetime.now().replace(microsecond=0)
@@ -554,7 +601,7 @@ def check_shape_diff(SHAPES_TO_COMPARE, OUT_FOLDER, REPORT, conPARAM, DB, SRS_CO
     
     for uShp in UNION_SHAPE:
         # Send data to PostgreSQL
-        union_tbl = shp_to_psql_tbl(
+        union_tbl = shp_to_psql(
             conPARAM, UNION_SHAPE[uShp], SRS_CODE, api='shp2pgsql'
         )
         
@@ -584,7 +631,7 @@ def check_shape_diff(SHAPES_TO_COMPARE, OUT_FOLDER, REPORT, conPARAM, DB, SRS_CO
             map1_cls = __SHAPES_TO_COMPARE[uShp[0]],
             map2_cls = __SHAPES_TO_COMPARE[uShp[1]],
             tbl = union_tbl
-        ))
+        ), api='psql')
         
         # Produce confusion matrix for the pair in comparison
         lulcCls = query_to_df(conPARAM, (
@@ -598,7 +645,7 @@ def check_shape_diff(SHAPES_TO_COMPARE, OUT_FOLDER, REPORT, conPARAM, DB, SRS_CO
             tbl = union_tbl,
             map1_cls = __SHAPES_TO_COMPARE[uShp[0]],
             map2_cls = __SHAPES_TO_COMPARE[uShp[1]]
-        )).fcol.tolist()
+        ), db_api='psql').fcol.tolist()
         
         matrixTbl = ntbl_by_query(conPARAM, "{}_matrix".format(union_tbl), (
             "SELECT * FROM crosstab('"
@@ -638,7 +685,7 @@ def check_shape_diff(SHAPES_TO_COMPARE, OUT_FOLDER, REPORT, conPARAM, DB, SRS_CO
             tbl = union_tbl,
             map1_cls = __SHAPES_TO_COMPARE[uShp[0]],
             map2_cls = __SHAPES_TO_COMPARE[uShp[1]]
-        ))
+        ), api='psql')
         
         SYNTH_TBL[uShp] = {"TOTAL" : areaMapTbl, "MATRIX" : matrixTbl}
     
@@ -654,7 +701,7 @@ def check_shape_diff(SHAPES_TO_COMPARE, OUT_FOLDER, REPORT, conPARAM, DB, SRS_CO
             "UNION ALL "
             "SELECT lulc_2 AS lulc FROM {tbl} GROUP BY lulc_2"
         ") AS lu GROUP BY lulc ORDER BY lulc"
-    ).format(tbl=total_table)).lulc.tolist()
+    ).format(tbl=total_table), db_api='psql').lulc.tolist()
     
     FLDS_TO_PIVOT = ["agree_percentage", "total_area"]
     
@@ -698,7 +745,7 @@ def check_shape_diff(SHAPES_TO_COMPARE, OUT_FOLDER, REPORT, conPARAM, DB, SRS_CO
                     tbl = total_table, valCol=f,
                     crossCols = ", ".join([
                         "{} numeric".format(map_) for map_ in mapsNames])
-                )
+                ), api='psql'
             )
         
         else:
@@ -707,7 +754,7 @@ def check_shape_diff(SHAPES_TO_COMPARE, OUT_FOLDER, REPORT, conPARAM, DB, SRS_CO
                     tbl = total_table, valCol=f,
                     crossCols = ", ".join([
                         "{} numeric".format(map_) for map_ in mapsNames])
-                )
+                ), api='psql'
             )
     
     # Union Mapping
@@ -720,7 +767,7 @@ def check_shape_diff(SHAPES_TO_COMPARE, OUT_FOLDER, REPORT, conPARAM, DB, SRS_CO
         columns=['shp_a', 'shp_b', 'union_shp']
     )
     
-    UNION_MAPPING = df_to_pgsql(conPARAM, UNION_MAPPING, 'union_map')
+    UNION_MAPPING = df_to_db(conPARAM, UNION_MAPPING, 'union_map', api='psql')
     
     # Export Results
     TABLES = [UNION_MAPPING, TOTAL_AGREE_TABLE, TOTAL_AREA_TABLE] + [
@@ -733,151 +780,83 @@ def check_shape_diff(SHAPES_TO_COMPARE, OUT_FOLDER, REPORT, conPARAM, DB, SRS_CO
         ) for x in SYNTH_TBL
     ]
     
-    psql_to_xls(
-        ["SELECT * FROM {}".format(x) for x in TABLES],
-        REPORT, SHEETS,
-        conPARAM, overwrite=None
+    db_to_xls(
+        conPARAM, ["SELECT * FROM {}".format(x) for x in TABLES],
+        REPORT, sheetsNames=SHEETS, dbAPI='psql'
     )
     
     return REPORT
 
 
-"""
-Tools to be applied inside SGBD Software
-"""
-
-def sgbd_get_feat_within(conParam, inTbl, inGeom, withinTbl, withinGeom, outTbl,
-                         inTblCols=None, withinCols=None, outTblIsFile=None,
-                         apiToUse='OGR_SPATIALITE'):
+def erase(inShp, erase_feat, out, splitMultiPart=None, notTbl=None,
+          api='pygrass'):
     """
-    Get Features within other Geometries in withinTbl
-    e.g. Intersect points with Polygons
+    Difference between two feature classes
     
-    apiToUse options:
-    * OGR_SPATIALITE;
-    * POSTGIS.
+    API's Available:
+    * pygrass;
+    * grass;
+    * saga;
+    * arcpy
     """
     
-    from gasp import goToList
-    
-    if not inTblCols and not withinCols:
-        colSelect = "intbl.*, witbl.*"
-    else:
-        if inTblCols and not withinCols:
-            colSelect = ", ".join([
-                "intbl.{}".format(c) for c in goToList(inTblCols)
-            ])
+    if api == 'saga':
+        """
+        Using SAGA GIS
         
-        elif not inTblCols and withinCols:
-            colSelect = ", ".join([
-                "witbl.{}".format(c) for c in goToList(withinCols)
-            ])
-        
-        else:
-            colSelect = "{}, {}".format(
-                ", ".join(["intbl.{}".format(c) for c in goToList(inTblCols)]),
-                ", ".join(["witbl.{}".format(c) for c in goToList(withinCols)])
-            )
+        It appears to be very slow
+        """
+        from gasp import exec_cmd
     
-    Q = (
-        "SELECT {selcols} FROM {in_tbl} AS intbl "
-        "INNER JOIN {within_tbl} AS witbl ON "
-        "ST_Within(intbl.{in_geom}, witbl.{wi_geom})"
-    ).format(
-        selcols=colSelect, in_tbl=inTbl, within_tbl=withinTbl,
-        in_geom=inGeom, wi_geom=withinGeom
-    )
+        cmd = (
+            'saga_cmd shapes_polygons 15 -A {in_shp} -B {erase_shp} '
+            '-RESULT {output} -SPLIT {sp}'
+        ).format(
+            in_shp=inShp, erase_shp=erase_feat,
+            output=out,
+            sp='0' if not splitMultiPart else '1'
+        )
     
-    if apiToUse == "OGR_SPATIALITE":
-        if outTblIsFile:
-            from gasp.cpu.gdl.anls.exct import sel_by_attr
-            
-            sel_by_attr(conParam, Q, outTbl)
-        
-        else:
-            from gasp.cpu.gdl.sqdb import create_new_table_by_query
-            
-            create_new_table_by_query(conParam, outTbl, Q)
+        outcmd = exec_cmd(cmd)
     
-    elif apiToUse == 'POSTGIS':
-        if outTblIsFile:
-            from gasp.to.shp import psql_to_shp
-            
-            psql_to_shp(
-                conParam, Q, outTbl, api="pgsql2shp",
-                geom_col=None, tableIsQuery=True)
+    elif api == 'pygrass':
+        """
+        Use pygrass
+        """
         
-        else:
-            from gasp.cpu.psql.mng.qw import ntbl_by_query
-            
-            ntbl_by_query(conParam, outTbl, Q)
+        from grass.pygrass.modules import Module
+        
+        erase = Module(
+            "v.overlay", ainput=inShp, atype="area",
+            binput=erase_feat, btype="area", operator="not",
+            output=out, overwrite=True, run_=False, quiet=True,
+            flags='t' if notTbl else None
+        )
+    
+        erase()
+    
+    elif api == 'grass':
+        """
+        Use GRASS GIS tool via command line
+        """
+        
+        from gasp import exec_cmd
+        
+        rcmd = exec_cmd((
+            "v.overlay ainput={} atype=area binput={} "
+            "btype=area operator=not output={} {}"
+            "--overwrite --quiet"
+        ).format(inShp, erase_feat, out, "" if not notTbl else "-t "))
+    
+    elif api == 'arcpy':
+        import arcpy
+        
+        arcpy.Erase_analysis(
+            in_features=inShp, erase_features=erase_feat, 
+            out_feature_class=out
+        )
     
     else:
-        raise ValueError((
-            "API {} is not available. OGR_SPATIALITE and POSTGIS "
-            "are the only valid options"
-        ))
+        raise ValueError('API {} is not available!'.format(api))
     
-    return outTbl
-
-
-def sgbd_get_feat_not_within(dbcon, inTbl, inGeom, withinTbl, withinGeom, outTbl,
-                             inTblCols=None, outTblIsFile=None,
-                             apiToUse='OGR_SPATIALITE'):
-    """
-    Get features not Within with any of the features in withinTbl
-    
-    apiToUse options:
-    * OGR_SPATIALITE;
-    * POSTGIS.
-    """
-    
-    from gasp import goToList
-    
-    Q = (
-        "SELECT {selCols} FROM {tbl} AS in_tbl WHERE ("
-        "in_tbl.{in_geom} NOT IN ("
-            "SELECT inin_tbl.{in_geom} FROM {wi_tbl} AS wi_tbl "
-            "INNER JOIN {tbl} AS inin_tbl ON "
-            "ST_Within(wi_tbl.{wi_geom}, inin_tbl.{in_geom})"
-        "))"
-    ).format(
-        selCols = "*" if not inTblCols else ", ".join(goToList(inTblCols)),
-        tbl     = inTbl,
-        in_geom = inGeom,
-        wi_tbl  = withinTbl,
-        wi_geom = withinGeom
-    )
-    
-    if apiToUse == "OGR_SPATIALITE":
-        if outTblIsFile:
-            from gasp.cpu.gdl.anls.exct import sel_by_attr
-            
-            sel_by_attr(dbcon, Q, outTbl)
-        
-        else:
-            from gasp.cpu.gdl.sqdb import create_new_table_by_query
-            
-            create_new_table_by_query(dbcon, outTbl, Q)
-    
-    elif apiToUse == "POSTGIS":
-        if outTblIsFile:
-            from gasp.to.shp import psql_to_shp
-            
-            psql_to_shp(
-                dbcon, Q, outTbl, api='pgsql2shp',
-                geom_col=None, tableIsQuery=True
-            )
-        
-        else:
-            from gasp.cpu.psql.mng.qw import ntbl_by_query
-            
-            ntbl_by_query(dbcon, outTbl, Q)
-    
-    else:
-        raise ValueError((
-            "API {} is not available. OGR_SPATIALITE and POSTGIS "
-            "are the only valid options"
-        ))
-    
-    return outTbl
+    return out

@@ -160,6 +160,7 @@ def get_cellsize(rst, xy=False, bnd=None, gisApi='gdal'):
     API'S Available:
     * gdal;
     * arcpy;
+    * pygrass
     """
     
     import os
@@ -287,6 +288,13 @@ def get_cellsize(rst, xy=False, bnd=None, gisApi='gdal'):
         else:
             return x
     
+    elif gisApi == 'pygrass':
+        import grass.script as grass
+        
+        dic = grass.raster.raster_info(rst)
+        
+        return dic['nsres']
+    
     else:
         raise ValueError('The api {} is not available'.format(gisApi))
 
@@ -409,3 +417,22 @@ def rst_stats(rst, bnd=None, api='gdal'):
         raise ValueError('Sorry, API {} is not available'.format(gisApi))
     
     return dicStats
+
+
+"""
+Raster Spatial Reference Systems
+"""
+
+def get_epsg_raster(rst):
+    """
+    Return the EPSG Code of the Spatial Reference System of a Raster
+    """
+    
+    from osgeo import gdal
+    from osgeo import osr
+    
+    d    = gdal.Open(rst)
+    proj = osr.SpatialReference(wkt=d.GetProjection())
+    
+    return int(proj.GetAttrValue('AUTHORITY', 1))
+

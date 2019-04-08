@@ -68,3 +68,21 @@ def drv_name(_file):
     name, ext = os.path.splitext(_file)
     return str(drv[ext])
 
+
+"""
+GRASS GIS Drivers
+"""
+
+def VectorialDrivers():
+    return {
+        '.shp' : 'ESRI_Shapefile',
+        '.gml' : 'GML'
+    }
+
+
+def RasterDrivers():
+    return {
+        '.tif': 'GTiff',
+        '.img': 'HFA'
+    }
+

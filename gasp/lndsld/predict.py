@@ -8,17 +8,17 @@ def infovalue(landslides, variables, iv_rst, dataEpsg):
     Informative Value using GDAL Library
     """
     
-    import os; import math;     import numpy
-    from osgeo                  import gdal
-    from gasp.fm.rst            import rst_to_array
-    from gasp.fm.shp            import shp_to_df
-    from gasp.prop.feat         import get_geom_type
-    from gasp.prop.rst          import rst_shape
-    from gasp.prop.rst          import count_cells
-    from gasp.prop.rst          import get_cellsize
-    from gasp.cpu.gdl.stats.rst import frequencies
-    from gasp.oss.ops           import create_folder
-    from gasp.to.rst            import array_to_raster
+    import os; import math; import numpy
+    from osgeo          import gdal
+    from gasp.fm.rst    import rst_to_array
+    from gasp.fm        import tbl_to_obj
+    from gasp.prop.feat import get_geom_type
+    from gasp.prop.rst  import rst_shape
+    from gasp.prop.rst  import count_cells
+    from gasp.prop.rst  import get_cellsize
+    from gasp.stats.rst import frequencies
+    from gasp.oss.ops   import create_folder
+    from gasp.to.rst    import array_to_raster
     
     # Create Workspace for temporary files
     workspace = create_folder(os.path.join(
@@ -50,7 +50,7 @@ def infovalue(landslides, variables, iv_rst, dataEpsg):
         # Landslides are not Raster
         # Open as Feature Class
         # See if is Point or Polygon
-        land_df = shp_to_df(landslides)
+        land_df = tbl_to_obj(landslides)
         geomType = get_geom_type(land_df, geomCol="geometry", gisApi='pandas')
         
         if geomType == 'Polygon' or geomType == 'MultiPolygon':
@@ -59,17 +59,17 @@ def infovalue(landslides, variables, iv_rst, dataEpsg):
         
         elif geomType == 'Point' or geomType == 'MultiPoint':
             # Do a Buffer
-            from gasp.cpu.pnd.anls.prox import buffer_to_shp
-            land_poly = buffer_to_shp(land_df, 100, os.path.join(
+            from gasp.anls.prox.bf import geodf_buffer_to_shp
+            land_poly = geodf_buffer_to_shp(land_df, 100, os.path.join(
                 workspace, 'landslides_buffer.shp'
             ))
         
         # Convert To Raster
-        from gasp.to.rst.gdl import shp_to_raster
+        from gasp.to.rst import shp_to_raster
         land_raster = shp_to_raster(
-            land_poly, get_cellsize(variables[0], gisApi='gdal'), -9999,
+            land_poly, None, get_cellsize(variables[0], gisApi='gdal'), -9999,
             os.path.join(workspace, 'landslides_rst.tif'),
-            rst_template=variables[0]
+            rst_template=variables[0], api='gdal'
         )
         
         land_rst = rst_to_array(land_raster)

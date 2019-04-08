@@ -4,80 +4,6 @@ XLS To Something Data Structure
 
 import pandas
 
-def xls_to_df(table_file, sheet=None, useFirstColAsIndex=None):
-    """
-    XLS to Pandas Dataframe
-    """
-    
-    sheet = 0 if sheet == None else sheet
-    
-    indexCol = 0 if useFirstColAsIndex else None
-    
-    d = pandas.read_excel(
-        table_file, sheet, index_col=indexCol,
-        encoding='utf-8', dtype='object'
-    )
-    
-    return d
-
-
-def xls_to_dict(table_file, sheet=None, dictValueAsList=None):
-    """
-    XLS File to a Python Dict
-    
-          | col_1 | col_2 | ... | col_n
-    row_1 | XXXXX | XXXXX | ... | XXXXX
-    row_2 | XXXXX | XXXXX | ... | XXXXX
-      ... | XXXXX | XXXXX | ... | XXXXX
-    row_n | XXXXX | XXXXX | ... | XXXXX
-    
-    dict = {
-        row_1 : {
-            col_1 : XXXXX,
-            col_2 : XXXXX,
-            ...
-            col_n : XXXXX
-        },
-        row_2 : {
-            col_1 : XXXXX,
-            col_2 : XXXXX,
-            ...
-            col_n : XXXXX
-        },
-        ...,
-        row_n : {
-            col_1 : XXXXX,
-            col_2 : XXXXX,
-            ...
-            col_n : XXXXX
-        }
-    }
-    
-    OR
-     col_1| col_2 | col_3 | ... | col_n
-    V_0:0 | V_0:1 | V_0:2 | ... | V_0:N
-    V_1:0 | V_1:1 | V_1:2 | ... | V_1:N
-    V_2:0 | V_2:1 | V_2:2 | ... | V_2:N
-     ...  |  ...  |  ...  | ... |  ...
-    V_N:0 | V_N:1 | V_N:2 | ... | V_N:N
-    
-    dict = {
-        V_0:0 : [V_0:1, V_0:2, ..., V_0:N],
-        V_1:0 : [V_1:1, V_1:2, ..., V_1:N],
-        V_2:0 : [V_2:1, V_2:2, ..., V_2:N],
-        ...
-        V_N:0 : [V_N:1, V_N:2, ..., V_N:N]
-    }
-    """
-    
-    from gasp.to.obj import df_to_dict
-    
-    table = xls_to_df(table_file, sheet=sheet, useFirstColAsIndex=True)
-    
-    return df_to_dict(table,
-        colsIsIndex=None, valueIsList=dictValueAsList
-    )
-
 
 def xlstimedelta_to_pddf(inXls, timecol, sheet_name=None, sheet_index=None,
                          columnsToMantain=None):
@@ -86,13 +12,12 @@ def xlstimedelta_to_pddf(inXls, timecol, sheet_name=None, sheet_index=None,
     Pandas DataFrame
     """
     
-    import datetime
-    import xlrd
-    from xlrd           import xldate_as_tuple
-    from gasp           import goToList
-    from gasp.xls.sheet import get_sheet_obj
-    from gasp.xls.fld   import columns_by_order
-    from gasp.xls.fld   import get_columns_position
+    import datetime;           import xlrd
+    from xlrd                  import xldate_as_tuple
+    from gasp                  import goToList
+    from gasp.mng.xlstbx.sheet import get_sheet_obj
+    from gasp.mng.fld.xls      import columns_by_order
+    from gasp.mng.fld.xls      import get_columns_position
     
     __xls = xlrd.open_workbook(inXls)
     sheet = get_sheet_obj(__xls, name=sheet_name, index=sheet_index)
@@ -174,7 +99,7 @@ def xls_to_dict_ktuple(xls, sheet_name=None, sheet_index=None):
     """
     
     import xlrd
-    from gasp.xls.sheet import get_sheet_obj
+    from gasp.mng.xlstbx.sheet import get_sheet_obj
     
     __xls = xlrd = open_workbook(xls)
     
@@ -190,49 +115,6 @@ def xls_to_dict_ktuple(xls, sheet_name=None, sheet_index=None):
     __xls.release_resources()
     
     return cname
-
-
-def xls_to_array(xls, sheet):
-    """
-    XLS File to a Python Dict
-    
-    col_1 | col_2 | col_3 | ... | col_N
-    V_0:0 | V_0:1 | V_0:2 | ... | V_0:N
-    V_1:0 | V_1:1 | V_1:2 | ... | V_1:N
-    V_2:0 | V_2:1 | V_2:2 | ... | V_2:N
-     ...  |  ...  |  ...  | ... |  ...
-    V_N:0 | V_N:1 | V_N:2 | ... | V_N:N
-    
-    list = [
-        {col_1 : V_0:0, col_2 : V_0:1, col_3 : V_0:2, ..., col_N : V_0:N},
-        {col_1 : V_1:0, col_2 : V_1:1, col_3 : V_1:2, ..., col_N : V_1:N},
-        {col_1 : V_2:0, col_2 : V_2:1, col_3 : V_2:2, ..., col_N : V_2:N},
-        ...,
-        {col_1 : V_N:0, col_2 : V_N:1, col_3 : V_N:2, ..., col_N : V_N:N},
-    ]
-    """
-    
-    from gasp.to.obj import df_to_list
-    
-    table = xls_to_df(
-        xls, sheet=sheet, useFirstColAsIndex=None
-    )
-    
-    return df_to_list(table)
-
-
-def ods_to_df(odsFile, sheet):
-    """
-    ODS file to Pandas Dataframe
-    """
-    
-    import json
-    import pandas
-    from pyexcel_ods import get_data
-    
-    data = get_data(odsFile)[sheet]
-    
-    return pandas.DataFrame(data[1:], columns=data[0])
 
 
 def get_unit_attributes(sheet_obj, entities_pos, fields):

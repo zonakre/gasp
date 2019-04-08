@@ -39,7 +39,7 @@ def create_TINdem(elevation, elvfield, lmt, prj, output, hydrology=None):
         )
     
     if type(prj) == int:
-        from gasp.fm.api.srorg import get_wkt_esri
+        from gasp.web.srorg import get_wkt_esri
         
         prjWkt = get_wkt_esri(prj)
     
@@ -71,7 +71,7 @@ def dem_from_tin(
     prj = os.path.splitext(countors)[0] + '.prj' if not prj else prj
     
     if type(prj) == int:
-        from gasp.fm.api.srorg import get_prj_web
+        from gasp.web.srorg import get_prj_web
     
         prj = get_prj_web(prj, os.path.join(
             w, 'prj_{}.prj'.format(str(prj))

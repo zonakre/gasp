@@ -11,10 +11,10 @@ def osmosis_extract(boundary, osmdata, wepsg, output):
     """
     
     import os
-    from osgeo                import ogr
-    from gasp                 import exec_cmd
-    from gasp.prop.ff         import drv_name
-    from gasp.cpu.gdl.mng.prj import project_geom
+    from osgeo        import ogr
+    from gasp         import exec_cmd
+    from gasp.prop.ff import drv_name
+    from gasp.mng.prj import project_geom
     
     # Assuming that boundary has only one feature
     # Get Geometry
@@ -27,7 +27,7 @@ def osmosis_extract(boundary, osmdata, wepsg, output):
     
     # Convert boundary to WGS84 -EPSG 4326
     geom_wgs = project_geom(
-        geom, int(wepsg), 4326
+        geom, int(wepsg), 4326, api='ogr'
     ) if int(wepsg) != 4326 else geom
     
     # Get boundary extent

@@ -11,20 +11,21 @@ def basic_buffer(osmLink, lineTable, dataFolder, apidb='SQLITE'):
     """
     
     import datetime
+    from gasp.fm.sql            import query_to_df
     if apidb == 'POSTGIS':
-        from gasp.fm.psql             import query_to_df as sqlq_to_df
-        from gasp.cpu.psql.anls.prox  import st_buffer
+        from gasp.sql.anls.prox import st_buffer
     else:
-        from gasp.fm.sqLite           import sqlq_to_df
-        from gasp.cpu.gdl.splite.prox import st_buffer
-    from gasp.to.rst.grs              import shp_to_raster
-    from gasp.to.shp.grs              import shp_to_grs
+        from gasp.sql.anls.prox import splite_buffer as st_buffer
+    from gasp.to.rst            import shp_to_raster
+    from gasp.to.shp.grs        import shp_to_grs
     
     time_a = datetime.datetime.now().replace(microsecond=0)
-    lulcCls = sqlq_to_df(osmLink, (
+    lulcCls = query_to_df(osmLink, (
         "SELECT basic_buffer FROM {} WHERE basic_buffer IS NOT NULL "
         "GROUP BY basic_buffer"
-    ).format(lineTable)).basic_buffer.tolist()
+    ).format(
+        lineTable
+    ), db_api='psql' if apidb=='POSTGIS' else 'sqlite').basic_buffer.tolist()
     time_b = datetime.datetime.now().replace(microsecond=0)
     
     timeGasto = {0 : ('check_cls', time_b - time_a)}
@@ -51,7 +52,8 @@ def basic_buffer(osmLink, lineTable, dataFolder, apidb='SQLITE'):
         
         # Data to Raster
         rstVect = shp_to_raster(
-            grsVect, "rbb_{}".format(int(cls)), int(cls), as_cmd=True
+            grsVect, int(cls), None, None, "rbb_{}".format(int(cls)), 
+            api="grass"
         )
         time_w = datetime.datetime.now().replace(microsecond=0)
         
@@ -72,22 +74,22 @@ def grs_vect_bbuffer(osmdata, lineTbl, api_db='SQLITE'):
     """
     
     import datetime
-    from gasp.cpu.grs.anls.prox import Buffer
-    from gasp.cpu.grs.mng.genze import dissolve
-    from gasp.cpu.grs.mng.tbl   import add_table
-    
+    from gasp.anls.prox.bf   import _buffer
+    from gasp.mng.genze      import dissolve
+    from gasp.mng.grstbl     import add_table
+    from gasp.sql.mng.tbl    import row_num as cnt_row
     if api_db != 'POSTGIS':
-        from gasp.to.shp.grs    import sqlite_to_shp as db_to_shp
-        from gasp.sqLite.i      import count_rows_in_query as cnt_row
+        from gasp.to.shp.grs import sqlite_to_shp as db_to_shp
     else:
-        from gasp.to.shp.grs import psql_to_grs    as db_to_shp
-        from gasp.cpu.psql.i import get_row_number as cnt_row
+        from gasp.to.shp.grs import psql_to_grs   as db_to_shp
     
     WHR = "basic_buffer IS NOT NULL"
     
     # Check if we have data
     time_a = datetime.datetime.now().replace(microsecond=0)
-    N = cnt_row(osmdata, lineTbl, where=WHR)
+    N = cnt_row(osmdata, lineTbl, where=WHR,
+        api='psql' if api_db == 'POSTGIS' else 'sqlite'
+    )
     time_b = datetime.datetime.now().replace(microsecond=0)
     
     if not N: return None, {0 : ('count_rows_roads', time_b - time_a)}
@@ -97,10 +99,12 @@ def grs_vect_bbuffer(osmdata, lineTbl, api_db='SQLITE'):
     )
     time_c = datetime.datetime.now().replace(microsecond=0)
     
-    grsBuf  = Buffer(grsVect, "line", "bf_basic_buffer", "bb_poly", cmdAS=True)
+    grsBuf  = _buffer(
+        grsVect, "bf_basic_buffer", "bb_poly", api="grass", geom_type="line"
+    )
     time_d = datetime.datetime.now().replace(microsecond=0)
     
-    grsDiss = dissolve(grsBuf, "bb_diss", "basic_buffer", asCMD=True)
+    grsDiss = dissolve(grsBuf, "bb_diss", "basic_buffer", api="grass")
     add_table(grsDiss, None, lyrN=1, asCMD=True)
     time_e = datetime.datetime.now().replace(microsecond=0)
     
@@ -119,21 +123,22 @@ def num_base_buffer(osmLink, lineTbl, folder, cells, srscode, rtemplate,
     """
     
     import datetime
-    from threading                import Thread
+    from threading              import Thread
+    from gasp.fm.sql            import query_to_df
     if api=='SQLITE':
-        from gasp.fm.sqLite           import sqlq_to_df
-        from gasp.cpu.gdl.splite.prox import st_buffer
+        from gasp.sql.anls.prox import splite_buffer as st_buffer
     else:
-        from gasp.fm.psql import query_to_df as sqlq_to_df
-        from gasp.cpu.psql.anls.prox import st_buffer
-    from gasp.to.rst.gdl          import shp_to_raster
+        from gasp.sql.anls.prox import st_buffer
+    from gasp.to.rst            import shp_to_raster
     
     # Get LULC Classes to be selected
     time_a = datetime.datetime.now().replace(microsecond=0)
-    lulcCls = sqlq_to_df(osmLink, (
+    lulcCls = query_to_df(osmLink, (
         "SELECT basic_buffer FROM {} WHERE basic_buffer IS NOT NULL "
         "GROUP BY basic_buffer"
-    ).format(lineTbl)).basic_buffer.tolist()
+    ).format(
+        lineTbl
+    ), db_api='psql' if api == 'POSTGIS' else 'sqlite').basic_buffer.tolist()
     time_b = datetime.datetime.now().replace(microsecond=0)
     
     timeGasto = {0 : ('check_cls', time_b - time_a)}
@@ -153,9 +158,9 @@ def num_base_buffer(osmLink, lineTbl, folder, cells, srscode, rtemplate,
         
         # To raster
         rstCls = shp_to_raster(
-            bb_file, cells, 0,
+            bb_file, None, cells, 0,
             os.path.join(folder, 'rst_bbfr_{}.tif'.format(CLS)),
-            srscode, rtemplate
+            epsg=srscode, rst_template=rtemplate, api='gdal'
         )
         time_z = datetime.datetime.now().replace(microsecond=0)
         
@@ -181,7 +186,7 @@ def arcg_buffering(lineTbl, nomenclature):
     
     from gasp.osm2lulc.utils     import osm_features_by_rule
     from gasp.cpu.arcg.anls.exct import select_by_attr
-    from gasp.cpu.arcg.anls.prox import Buffer
+    from gasp.anls.prox.bf       import _buffer
     from gasp.cpu.arcg.mng.gen   import delete
     from gasp.prop.feat          import feat_count
     
@@ -220,12 +225,12 @@ def arcg_buffering(lineTbl, nomenclature):
             
             if not feat_count(fShp, gisApi='arcpy'): continue
             
-            bfShp = Buffer(
-                fShp, os.path.join(
+            bfShp = _buffer(
+                fShp, str(dist).replace('.', ','), os.path.join(
                     WORK, "bufbf_{}_{}".format(
                         str(cls), str(dist).replace(".", "_"))
                 ),
-                str(dist).replace('.', ','), dissolve="ALL"
+                api='arcpy', dissolve="ALL"
             )
             
             if cls not in resCls:

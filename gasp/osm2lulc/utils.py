@@ -42,7 +42,7 @@ def record_time_consumed(timeData, outXls):
     """
     
     import pandas
-    from gasp.to.xls import df_to_xls
+    from gasp.to import obj_to_tbl
     
     # Produce main table - Time consumed by rule
     main = [{
@@ -84,19 +84,19 @@ def record_time_consumed(timeData, outXls):
     # Export tables to excel
     dfs = [pandas.DataFrame(main), pandas.DataFrame(timeInsideRule)]
     
-    return df_to_xls(dfs, outXls, sheetsName=['general', 'detailed'])
+    return obj_to_tbl(dfs, outXls, sheetsName=['general', 'detailed'])
 
 
-def osm_project(osmDb, srs_epsg, api='SQLITE'):
+def osm_project(osmDb, srs_epsg, api='SQLITE', isGlobeLand=None):
     """
     Reproject OSMDATA to a specific Spatial Reference System
     """
     
     if api != 'POSTGIS':
-        from gasp.cpu.gdl.mng.prj import ogr2ogr_transform_inside_sqlite as proj
+        from gasp.sql.mng.prj import ogr2ogr_transform_inside_sqlite as proj
     else:
-        from gasp.cpu.psql.mng.qw import ntbl_by_query as proj
-        from gasp.cpu.psql.mng    import add_idx_to_geom
+        from gasp.sql.mng.qw   import ntbl_by_query as proj
+        from gasp.sql.mng.geom import add_idx_to_geom
     from .var import osmTableData, GEOM_AREA
     
     osmtables = {}
@@ -113,10 +113,19 @@ def osm_project(osmDb, srs_epsg, api='SQLITE'):
                 "buildings IS NOT NULL OR area_upper IS NOT NULL OR "
                 "area_lower IS NOT NULL"
             ).format(
+                "" if isGlobeLand else "buildings, ",
                 geomColTrans=GEOM_COL if api != 'POSTGIS' else \
                     "ST_Transform({}, {})".format(GEOM_COL, srs_epsg),
                 geomCol=GEOM_COL, epsg=srs_epsg,
-                t=osmTableData[table], geom_area=GEOM_AREA)
+                t=osmTableData[table], geom_area=GEOM_AREA
+            ) if not isGlobeLand else (
+                "SELECT building, selection, {geomColTrans} AS geometry FROM "
+                "{t} WHERE selection IS NOT NULL"
+            ).format(
+                geomColTrans=GEOM_COL if api != 'POSTGIS' else \
+                    "ST_Transform({}, {})".format(GEOM_COL, srs_epsg),
+                    t=osmTableData[table]
+            )
         
         elif table == 'lines':
             Q = (
@@ -131,13 +140,12 @@ def osm_project(osmDb, srs_epsg, api='SQLITE'):
             )
         
         elif table == 'points':
-            Q = (
-                "SELECT buildings, {} AS geometry FROM {} "
-                "WHERE buildings IS NOT NULL"
-            ).format(
+            Q = "SELECT {}, {} AS geometry FROM {}{}".format(
+                "NULL AS buildings" if isGlobeLand else "buildings",
                 GEOM_COL if api != 'POSTGIS' else \
                     "ST_Transform({}, {})".format(GEOM_COL, srs_epsg),
-                osmTableData[table]
+                osmTableData[table],
+                "" if isGlobeLand else " WHERE buildings IS NOT NULL"
             )
         
         if api != 'POSTGIS':
@@ -147,7 +155,7 @@ def osm_project(osmDb, srs_epsg, api='SQLITE'):
                 sql=Q
             )
         else:
-            proj(osmDb, '{}_{}'.format(table, str(srs_epsg)), Q)
+            proj(osmDb, '{}_{}'.format(table, str(srs_epsg)), Q, api='psql')
             
             add_idx_to_geom(osmDb, '{}_{}'.format(table, str(srs_epsg)), "geometry")
         
@@ -158,7 +166,7 @@ def osm_project(osmDb, srs_epsg, api='SQLITE'):
 
 def osm_features_by_rule(nomenclature, rule):
     
-    from gasp.fm.sqLite    import data_by_query
+    from gasp.fm.sql import query_to_df
     
     COLS = [
         DB_SCHEMA[nomenclature]["CLS_FK"],
@@ -220,15 +228,14 @@ def osm_features_by_rule(nomenclature, rule):
         rsupfield_=rule_info_field_
     )
     
-    osm_featTable = pandas.DataFrame(data_by_query(
-        PROCEDURE_DB, QUERY), columns=COLS)
+    osm_featTable = query_to_df(PROCEDURE_DB, QUERY, db_api='sqlite')
     
     return osm_featTable
 
 
 def get_osm_feat_by_rule(nomenclature):
     
-    from gasp.fm.sqLite    import sqlq_to_df
+    from gasp.fm.sql import query_to_df
     
     Q = (
         "SELECT jtbl.{rellulccls}, {osmfeat}.{key}, {osmfeat}.{val}, "
@@ -256,7 +263,7 @@ def get_osm_feat_by_rule(nomenclature):
         areaCol    = DB_SCHEMA[nomenclature]["RULES_FIELDS"]["AREA"]
     )
     
-    return sqlq_to_df(PROCEDURE_DB, Q)
+    return query_to_df(PROCEDURE_DB, Q, db_api='sqlite')
 
 
 def add_lulc_to_osmfeat(osmdb, osmTbl, nomenclature, api='SQLITE'):
@@ -264,11 +271,8 @@ def add_lulc_to_osmfeat(osmdb, osmTbl, nomenclature, api='SQLITE'):
     Add LULC Classes in OSM Data Tables
     """
     
-    if api != 'POSTGIS':
-        from gasp.sqLite.mng.qw import exec_write_query
-    else:
-        from gasp.cpu.psql.mng.qw import exec_write_q as exec_write_query
-    from gasp.osm2lulc.var  import DB_SCHEMA
+    from gasp.sql.mng.qw   import exec_write_q
+    from gasp.osm2lulc.var import DB_SCHEMA
     
     KEY_COL   = DB_SCHEMA["OSM_FEATURES"]["OSM_KEY"]
     VALUE_COL = DB_SCHEMA["OSM_FEATURES"]["OSM_VALUE"]
@@ -365,5 +369,5 @@ def add_lulc_to_osmfeat(osmdb, osmTbl, nomenclature, api='SQLITE'):
                 )
             ]
     
-    exec_write_query(osmdb, Q)
+    exec_write_q(osmdb, Q, api='psql' if api == 'POSTGIS' else 'sqlite')
 

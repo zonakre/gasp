@@ -11,10 +11,10 @@ def conditional_dependence(movs, indp):
     """
     
     import math
-    from decimal                import Decimal
-    from gasp.prop.feat         import feat_count
-    from gasp.prop.rst          import get_cellsize, count_cells
-    from gasp.cpu.gdl.stats.rst import frequencies
+    from decimal        import Decimal
+    from gasp.prop.feat import feat_count
+    from gasp.prop.rst  import get_cellsize, count_cells
+    from gasp.stats.rst import frequencies
     
     def foundPredT(dic):
         PredT = 0.0
@@ -94,7 +94,7 @@ def MakeRasterPearsonCorrelationMatrix(indV, out):
     """
     
     import xlwt; import os
-    from gasp.cpu.gdl.stats.correlation import pearson_correlation
+    from gasp.stats.correlation import pearson_correlation
     
     # Open Report File
     report = xlwt.Workbook()

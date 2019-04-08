@@ -14,10 +14,10 @@ def range_score(raster, output, MAX=True, __template=None):
     """
     
     import os
-    from gasp.oss                      import get_filename
-    from gasp.cpu.arcg.lyr             import rst_lyr
-    from gasp.prop.rst                 import rst_stats
-    from gasp.cpu.arcg.spanlst.algebra import rstcalc
+    from gasp.oss             import get_filename
+    from gasp.cpu.arcg.lyr    import rst_lyr
+    from gasp.prop.rst        import rst_stats
+    from gasp.spanlst.algebra import rstcalc
     
     lyr = rst_lyr(raster)
     
@@ -32,7 +32,7 @@ def range_score(raster, output, MAX=True, __template=None):
             _min=str(__min), _max=str(__max),
             rst=get_filename(raster)
         ),
-        output
+        output, api='arcpy'
     )
     
     return output
@@ -47,10 +47,10 @@ def maximum_score(raster, output, MAX=True, __template=None):
     """
     
     import os
-    from gasp.oss                      import get_filename
-    from gasp.cpu.arcg.lyr             import rst_lyr
-    from gasp.prop.rst                 import rst_stats
-    from gasp.cpu.arcg.spanlst.algebra import rstcalc
+    from gasp.oss             import get_filename
+    from gasp.cpu.arcg.lyr    import rst_lyr
+    from gasp.prop.rst        import rst_stats
+    from gasp.spanlst.algebra import rstcalc
     
     lyr = rst_lyr(raster)
     
@@ -63,7 +63,7 @@ def maximum_score(raster, output, MAX=True, __template=None):
             rst=get_filename(raster),
             _max=str(__max)
         ),
-        output, template=__template
+        output, template=__template, api='arcpy'
     )
     
     return output

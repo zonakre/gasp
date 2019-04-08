@@ -77,10 +77,10 @@ def sanitize_report(report):
 
 
 def san_report_combine(report):
-    from gasp.fm.txt          import txt_to_df
-    from gasp.cpu.pnd.mng.fld import splitcol_to_newcols
+    from gasp.fm         import tbl_to_obj
+    from gasp.mng.fld.df import splitcol_to_newcols
     
-    repdata = txt_to_df(report, _delimiter="z")
+    repdata = tbl_to_obj(report, _delimiter="z")
     
     repdata.rename(columns={repdata.columns.values[0] : 'data'}, inplace=True)
     repdata.drop([
@@ -122,64 +122,6 @@ def get_rst_report_data(rst, UNITS=None):
     del_file(REPORT_PATH)
     
     return report_data
-
-
-def get_cellsize(rst):
-    import grass.script as grass
-    
-    dic = grass.raster.raster_info(rst)
-    
-    return dic['nsres']
-
-
-"""
-GRASS GIS Raster Calculator
-"""
-def mapcalc(equation, out, asCMD=None):
-    """
-    Raster Calculator
-    """
-    
-    if not asCMD:
-        from grass.pygrass.modules import Module
-    
-        rc = Module(
-            'r.mapcalc',
-            '{} = {}'.format(out, equation),
-            overwrite=True, run_=False, quiet=True
-        )
-    
-        rc()
-    
-    else:
-        from gasp import exec_cmd
-        
-        rcmd = exec_cmd((
-            "r.mapcalc \"{} = {}\" --overwrite --quiet"
-        ).format(out, equation))
-    
-    return out
-
-
-"""
-Raster spatial analyst
-"""
-def rcost(cst, origin, out):
-    """
-    Return a acumulated cost surface
-    """
-    
-    from grass.pygrass.modules import Module
-    
-    acum_cst = Module(
-        'r.cost', input=cst, output=out, start_points=origin,
-        overwrite=True, run_=False, quiet=True
-    )
-    
-    acum_cst()
-    
-    return out
-
 
 """
 Merge and Combine raster dataset
@@ -286,8 +228,8 @@ def zonal_geometry(in_rst, out_rst, work):
     
     import os
     import codecs
-    from grass.pygrass.modules     import Module
-    from gasp.cpu.grs.spanlst.rcls import reclassify
+    from grass.pygrass.modules import Module
+    from gasp.spanlst.rcls     import reclassify
     
     txt_file = os.path.join(work, 'report.txt')
     r_geometry = Module(

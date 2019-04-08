@@ -28,3 +28,19 @@ def saga_to_geotiff(inFile, outFile):
     
     return outFile
 
+
+
+def tif_to_grid(inFile, outFile):
+    """
+    GeoTiff to SAGA GIS GRID
+    """
+    
+    comand = (
+        "saga_cmd io_gdal 0 -FILES {} "
+        "-GRIDS {}"
+    ).format(inFile, outFile)
+    
+    outcmd = exec_cmd(comand)
+    
+    return outFile
+

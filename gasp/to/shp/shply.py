@@ -18,8 +18,8 @@ def shply_array_to_shp(arrayLike, outfile, geomType, epsg=None,
     """
     
     import os
-    from gasp.prop.ff         import drv_name
-    from gasp.cpu.gdl.mng.prj import get_sref_from_epsg
+    from gasp.prop.ff  import drv_name
+    from gasp.prop.prj import get_sref_from_epsg
     
     # Create output file
     shp = ogr.GetDriverByName(
@@ -66,9 +66,9 @@ def shply_dict_to_shp(dictLike, outfile, geomType, epsg=None,
     """
     
     import os
-    from gasp.prop.ff         import drv_name
-    from gasp.cpu.gdl.mng.prj import get_sref_from_epsg
-    from gasp.oss             import get_filename
+    from gasp.prop.ff  import drv_name
+    from gasp.prop.prj import get_sref_from_epsg
+    from gasp.oss      import get_filename
     
     # Create output file
     shp = ogr.GetDriverByName(

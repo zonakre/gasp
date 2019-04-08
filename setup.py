@@ -5,66 +5,62 @@ setup(
     name='gasp',
     version='0.0.1',
     description='GASP',
-    url='https://github.com/JoaquimPatriarca/GIS-SENPY',
-    author='Joaquim Patriarca',
+    url='https://github.com/jasp382/gasp',
+    author='jasp382',
     author_email='joaquimaspatriarca@gmail.com',
     license='GPL',
     packages=[
         # Main module
-        'gasp', 'gasp.anls', 'gasp.mng', 'gasp.prop',
+        'gasp',
         # ******************************************************************** #
-        'gasp.djg', 'gasp.djg.files', 'gasp.djg.gis', 'gasp.djg.mdl',
+        'gasp.anls', 'gasp.anls.prox',
         # ******************************************************************** #
-        'gasp.fm'         , 'gasp.fm.api', 'gasp.fm.api.fb', 'gasp.fm.api.glg',
-        'gasp.fm.api.here',
+        'gasp.dt', 'gasp.dt.sat',
         # ******************************************************************** #
-        'gasp.cpu',
+        'gasp.fm',
         # ******************************************************************** #
-        'gasp.cpu.arcg'        ,      'gasp.cpu.arcg._3D', 'gasp.cpu.arcg._3D.mng',
-        'gasp.cpu.arcg.anls'   ,      'gasp.cpu.arcg.mng', 'gasp.cpu.arcg.mng.rst',
-        'gasp.cpu.arcg.maps'   , 'gasp.cpu.arcg.netanlst',
-        'gasp.cpu.arcg.spanlst',    'gasp.cpu.arcg.stats',
+        'gasp.hydro',
         # ******************************************************************** #
-        'gasp.cpu.gdl'      ,    'gasp.cpu.gdl.anls', 'gasp.cpu.gdl.anls.prox',
-        'gasp.cpu.gdl.img'  ,     'gasp.cpu.gdl.mng',   'gasp.cpu.gdl.mng.rst',
-        'gasp.cpu.gdl.spanlst',    'gasp.cpu.gdl.splite',
-        'gasp.cpu.gdl.stats',
+        'gasp.lndsld',
         # ******************************************************************** #
-        'gasp.cpu.grs'        , 'gasp.cpu.grs.anls'    , 'gasp.cpu.grs.img',
-        'gasp.cpu.grs.mng'    , 'gasp.cpu.grs.netanlst', 'gasp.cpu.grs.spanlst',
+        'gasp.maps', 'gasp.maps.arctbx',
         # ******************************************************************** #
-        'gasp.cpu.pnd'             ,     'gasp.cpu.pnd.anls',
-        'gasp.cpu.pnd.mng'         , 'gasp.cpu.pnd.netanlst',
-        'gasp.cpu.pnd.netanlst.glg',     'gasp.cpu.pnd.prop',
+        'gasp.mng', 'gasp.mng.fld', 'gasp.mng.xlstbx',
         # ******************************************************************** #
-        'gasp.cpu.psql'    , 'gasp.cpu.psql.anls', 'gasp.cpu.psql.charts',
-        'gasp.cpu.psql.mng',
-        # ******************************************************************** #
-        'gasp.cpu.qgis', 'gasp.cpu.qgis.anls', 'gasp.cpu.qgis.mng',
-        # ******************************************************************** #
-        'gasp.cpu.saga'    ,    'gasp.cpu.saga.anls',
-        'gasp.cpu.saga.mng', 'gasp.cpu.saga.spanlst',
-        # ******************************************************************** #
-        'gasp.geosrv', 'gasp.geosrv.stores', 'gasp.geosrv.styl',
-        # ******************************************************************** #
-        'gasp.ine', 'gasp.lndsld', 'gasp.mapseries', 'gasp.ogcsld',
+        'gasp.mob', 'gasp.mob.api', 'gasp.mob.api.glg',
+        'gasp.mob.arctbx', 'gasp.mob.grstbx',
         # ******************************************************************** #
         'gasp.osm2lulc',
         # ******************************************************************** #
         'gasp.oss',
         # ******************************************************************** #
-        'gasp.sqLite', 'gasp.sqLite.mng', 'gasp.terrain',
+        'gasp.prop',
+        # ******************************************************************** #
+        'gasp.spanlst',
+        # ******************************************************************** #
+        'gasp.sql', 'gasp.sql.anls', 'gasp.sql.charts', 'gasp.sql.mng',
+        # ******************************************************************** #
+        'gasp.stats',
+        # ******************************************************************** #
+        'gasp.terrain',
         # ******************************************************************** #
         'gasp.to', 'gasp.to.rst', 'gasp.to.shp',
         # ******************************************************************** #
-        'gasp.mob', 'gasp.sat', 'gasp.web',
+        'gasp.web',
+        'gasp.web.dsn', 'gasp.web.dsn.fb',
+        'gasp.web.geosrv', 'gasp.web.geosrv.styl', 'gasp.web.geosrv.styl.sld',
+        'gasp.web.glg',
         # ******************************************************************** #
-        'gasp.xls', 'gasp.xls.adv'
+        'gasp.cpu',
+        'gasp.cpu.arcg'     , 'gasp.cpu.arcg._3D', 'gasp.cpu.arcg._3D.mng',
+        'gasp.cpu.arcg.anls', 'gasp.cpu.arcg.mng', 'gasp.cpu.arcg.mng.rst',
+        'gasp.cpu.arcg.spanlst', 'gasp.cpu.arcg.stats',
+        # ******************************************************************** #
+        'gasp.cpu.grs', 'gasp.cpu.grs.mng', 'gasp.cpu.grs.spanlst',
     ],
     install_requires=[
-        'psycopg2==2.7.7',
+        'psycopg2-binary==2.8.2',
         'click==7.0', 'click-plugins==1.0.4', 'cligj==0.5.0',
-        'django==1.11.18', 'django-widget-tweaks==1.4.1',
         'numpy==1.15.4',
         'sqlalchemy==1.2.15', 'geoalchemy2==0.5.0',
         'shapely==1.6.4',

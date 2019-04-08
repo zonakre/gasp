@@ -22,12 +22,12 @@ def array_to_shp(array_like, outFile, x='x', y='y', epsg=None):
     """
     
     import os
-    from gasp                 import unicode_to_str
-    from gasp.prop.ff         import drv_name
-    from gasp.cpu.gdl         import create_point
-    from gasp.cpu.gdl.mng.prj import get_sref_from_epsg
-    from gasp.cpu.gdl.mng.fld import map_pyType_fldCode
-    from gasp.oss             import get_filename
+    from gasp          import unicode_to_str
+    from gasp.prop.ff  import drv_name
+    from gasp.to.geom  import create_point
+    from gasp.prop.prj import get_sref_from_epsg
+    from gasp.mng.fld  import map_pyType_fldCode
+    from gasp.oss      import get_filename
     
     ogr.UseExceptions()
     
@@ -78,7 +78,8 @@ def array_to_shp(array_like, outFile, x='x', y='y', epsg=None):
     for i in range(len(array_like)):
         feat = ogr.Feature(defn)
         feat.SetGeometry(
-            create_point(array_like[i][x], array_like[i][y]))
+            create_point(array_like[i][x], array_like[i][y], api='ogr')
+        )
         
         for k in array_like[i]:
             if k != x and k != y:
@@ -105,7 +106,7 @@ def osm_to_featurecls(xmlOsm, output, fileFormat='.shp', useXmlName=None):
     """
 
     import os
-    from gasp.cpu.gdl.anls.exct import sel_by_attr
+    from gasp.anls.exct import sel_by_attr
     
     # Convert xml to sqliteDB
     sqDB = ogr_btw_driver(xmlOsm, os.path.join(output, 'fresh_osm.sqlite'))
@@ -119,7 +120,7 @@ def osm_to_featurecls(xmlOsm, output, fileFormat='.shp', useXmlName=None):
             os.path.join(output, "{}{}{}".format(
                 "" if not useXmlName else os.path.splitext(os.path.basename(xmlOsm))[0],
                 T, fileFormat if fileFormat[0] == '.' else "." + fileFormat
-            ))
+            )), api_gis='ogr'
         )
 
     return output
@@ -132,8 +133,7 @@ def getosm_to_featurecls(inBoundary, outVector, boundaryEpsg=4326,
     """
 
     import os
-    
-    from gasp.fm.api.osm import download_by_boundary
+    from gasp.web.osm import download_by_boundary
 
     # Download data from the web
     osmData = download_by_boundary(

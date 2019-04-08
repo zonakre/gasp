@@ -17,14 +17,6 @@ def hillshade(dem, out):
     return out
 
 
-def slope(dem, slope, data):
-    """
-    Return slope raster
-    """
-    arcpy.gp.Slope_sa(dem, slope, data)
-    return slope_rst
-
-
 def aspect(dem, aspect, reclass=None):
     """
     Return Aspect raster reclassified or not

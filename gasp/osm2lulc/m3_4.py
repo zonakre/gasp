@@ -12,13 +12,12 @@ def rst_area(osmLink, polygonTable, UPPER=True, api='SQLITE'):
     """
     
     import datetime
+    from gasp.fm.sql import query_to_df
     if api == 'POSTGIS':
-        from gasp.fm.psql    import query_to_df as sqlq_to_df
         from gasp.to.shp.grs import psql_to_grs as db_to_grs
     else:
-        from gasp.fm.sqLite  import sqlq_to_df
         from gasp.to.shp.grs import sqlite_to_shp as db_to_grs
-    from gasp.to.rst.grs     import shp_to_raster
+    from gasp.to.rst         import shp_to_raster
     from gasp.osm2lulc.var   import GEOM_AREA
     
     RULE_COL = 'area_upper' if UPPER else 'area_lower'
@@ -28,11 +27,11 @@ def rst_area(osmLink, polygonTable, UPPER=True, api='SQLITE'):
     
     # Get Classes
     time_a = datetime.datetime.now().replace(microsecond=0)
-    lulcCls = sqlq_to_df(osmLink, (
+    lulcCls = query_to_df(osmLink, (
         "SELECT {r} FROM {tbl} WHERE {ga} {op} t_{r} GROUP BY {r}"
     ).format(
          r=RULE_COL, tbl=polygonTable, ga=GEOM_AREA, op=OPERATOR
-    ))[RULE_COL].tolist()
+    ), db_api='psql' if api == 'POSTGIS' else 'sqlite')[RULE_COL].tolist()
     time_b = datetime.datetime.now().replace(microsecond=0)
     
     timeGasto = {0 : ('check_cls', time_b - time_a)}
@@ -52,8 +51,8 @@ def rst_area(osmLink, polygonTable, UPPER=True, api='SQLITE'):
         timeGasto[tk] = ('import_{}'.format(cls), time_y - time_x)
         
         grsRst = shp_to_raster(
-            grsVect, "rst_{}".format(RULE_COL),
-            int(cls), as_cmd=True
+            grsVect, int(cls), None, None, "rst_{}".format(RULE_COL),
+            api='grass'
         )
         time_z = datetime.datetime.now().replace(microsecond=0)
         timeGasto[tk+1] = ('torst_{}'.format(cls), time_z - time_y)
@@ -72,14 +71,13 @@ def grs_vect_selbyarea(osmcon, polyTbl, UPPER=True, apidb='SQLITE'):
     """
     
     import datetime
-    from gasp.cpu.grs.mng.genze import dissolve
-    from gasp.cpu.grs.mng.tbl   import add_table
-    from gasp.osm2lulc.var      import GEOM_AREA
+    from gasp.mng.genze      import dissolve
+    from gasp.mng.grstbl     import add_table
+    from gasp.osm2lulc.var   import GEOM_AREA
+    from gasp.sql.mng.tbl    import row_num as cnt_row
     if apidb != 'POSTGIS':
-        from gasp.sqLite.i   import count_rows_in_query as cnt_row
         from gasp.to.shp.grs import sqlite_to_shp as db_to_shp
     else:
-        from gasp.cpu.psql.i import get_row_number as cnt_row
         from gasp.to.shp.grs import psql_to_grs as db_to_shp
         
     
@@ -92,7 +90,9 @@ def grs_vect_selbyarea(osmcon, polyTbl, UPPER=True, apidb='SQLITE'):
     
     # Check if we have interest data
     time_a = datetime.datetime.now().replace(microsecond=0)
-    N = cnt_row(osmcon, polyTbl, where=WHR)
+    N = cnt_row(osmcon, polyTbl, where=WHR,
+        api='psql' if apidb == 'POSTGIS' else 'sqlite'
+    )
     time_b = datetime.datetime.now().replace(microsecond=0)
     
     if not N: return None, {0 : ('count_rows', time_b - time_a)}
@@ -106,7 +106,7 @@ def grs_vect_selbyarea(osmcon, polyTbl, UPPER=True, apidb='SQLITE'):
     
     dissVect = dissolve(
         grsVect, "diss_area_{}".format(DIRECTION),
-        "area_{}".format(DIRECTION), asCMD=True
+        "area_{}".format(DIRECTION), api="grass"
     )
     
     add_table(dissVect, None, lyrN=1, asCMD=True)
@@ -127,16 +127,15 @@ def num_selbyarea(osmLink, polyTbl, folder, cellsize, srscode, rstTemplate,
     A field with threshold is needed in the database.
     """
     
-    import datetime;                import os
-    from threading                  import Thread
+    import datetime;        import os
+    from threading          import Thread
+    from gasp.fm.sql        import query_to_df
     if api == 'SQLITE':
-        from gasp.fm.sqLite         import sqlq_to_df
-        from gasp.cpu.gdl.anls.exct import sel_by_attr
+        from gasp.anls.exct import sel_by_attr
     else:
-        from gasp.fm.psql           import query_to_df as sqlq_to_df
-        from gasp.to.shp            import psql_to_shp as sel_by_attr
-    from gasp.to.rst.gdl            import shp_to_raster
-    from gasp.osm2lulc.var          import GEOM_AREA
+        from gasp.to.shp    import psql_to_shp as sel_by_attr
+    from gasp.to.rst        import shp_to_raster
+    from gasp.osm2lulc.var  import GEOM_AREA
     
     # Get OSM Features to be selected for this rule
     RULE_COL = 'area_upper' if UPPER else 'area_lower'
@@ -145,11 +144,11 @@ def num_selbyarea(osmLink, polyTbl, folder, cellsize, srscode, rstTemplate,
     
     # Get Classes
     time_a = datetime.datetime.now().replace(microsecond=0)
-    lulcCls = sqlq_to_df(osmLink, (
+    lulcCls = query_to_df(osmLink, (
         "SELECT {r} FROM {tbl} WHERE {ga} {op} t_{r} GROUP BY {r}"
     ).format(
         r=RULE_COL, tbl=polyTbl, ga=GEOM_AREA, op=OPERATOR
-    ))[RULE_COL].tolist()
+    ), db_api='psql' if api == 'POSTGIS' else 'sqlite')[RULE_COL].tolist()
     time_b = datetime.datetime.now().replace(microsecond=0)
     
     timeGasto = {0 : ('check_cls', time_b - time_a)}
@@ -165,7 +164,8 @@ def num_selbyarea(osmLink, polyTbl, folder, cellsize, srscode, rstTemplate,
                 osmLink, SQL_Q.format(c=str(CLS), tbl=polyTbl, w=WHR.format(
                     op=OPERATOR, r=RULE_COL, ga=GEOM_AREA, cls_=CLS
                 )),
-                os.path.join(folder, "{}_{}.shp".format(RULE_COL,CLS))
+                os.path.join(folder, "{}_{}.shp".format(RULE_COL,CLS)),
+                api_gis='ogr'
             )
         else:
             shpCls = sel_by_attr(
@@ -177,9 +177,9 @@ def num_selbyarea(osmLink, polyTbl, folder, cellsize, srscode, rstTemplate,
         time_y = datetime.datetime.now().replace(microsecond=0)
         
         rst = shp_to_raster(
-            shpCls, cellsize, 0, os.path.join(
+            shpCls, None, cellsize, 0, os.path.join(
                 folder, "{}_{}.tif".format(RULE_COL, CLS)
-            ), srscode, rstTemplate
+            ), epg=srscode, rst_template=rstTemplate, api='gdal'
         )
         time_z = datetime.datetime.now().replace(microsecond=0)
         

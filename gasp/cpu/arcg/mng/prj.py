@@ -22,7 +22,7 @@ def shpFolder_project(shpFolder, outFolder, outEpsg):
 
 
 def transform_object(geom, outepsg):
-    from gasp.fm.api.srorg import get_wkt_esri
+    from gasp.web.srorg import get_wkt_esri
     
     srsObj = get_wkt_esri(outepsg)
     
@@ -34,7 +34,7 @@ def transform_geomdict(inGeom, outEpsg, geomK="GEOM"):
     Transform geometries in dict
     """
     
-    from gasp.fm.api.srorg import get_wkt_esri
+    from gasp.web.srorg import get_wkt_esri
     
     srs_obj = get_wkt_esri(outEpsg)
     

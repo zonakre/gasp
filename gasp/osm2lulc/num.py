@@ -28,7 +28,7 @@ def osm2lulc(osmdata, nomenclature, refRaster, lulcRst,
     from gasp.prop.rst       import get_cellsize
     from gasp.oss.ops        import create_folder, copy_file
     if roadsAPI == 'POSTGIS':
-        from gasp.cpu.psql.mng   import create_db
+        from gasp.sql.mng.db     import create_db
         from gasp.osm2lulc.utils import osm_to_pgsql
         from gasp.osm2lulc.mod2  import pg_num_roads
     else:
@@ -91,7 +91,8 @@ def osm2lulc(osmdata, nomenclature, refRaster, lulcRst,
     # Transform SRS of OSM Data #
     # ************************************************************************ #
     osmTableData = osm_project(
-        conPGSQL if roadsAPI == 'POSTGIS' else osm_db, epsg, api=roadsAPI
+        conPGSQL if roadsAPI == 'POSTGIS' else osm_db, epsg, api=roadsAPI,
+        isGlobeLand=None if nomenclature != "GLOBE_LAND_30" else True
     )
     time_e = datetime.datetime.now().replace(microsecond=0)
     # ************************************************************************ #
@@ -133,21 +134,27 @@ def osm2lulc(osmdata, nomenclature, refRaster, lulcRst,
         # 3 - Area Upper than #
         # ******************************************************************** #
         elif ruleID == 3:
-            res, tm = num_selbyarea(
-                conPGSQL if not _osmdb else _osmdb,
-                osmTableData['polygons'], workspace,
-                CELLSIZE, epsg, refRaster, UPPER=True, api=roadsAPI
-            )
+            if nomenclature != "GLOBE_LAND_30":
+                res, tm = num_selbyarea(
+                    conPGSQL if not _osmdb else _osmdb,
+                    osmTableData['polygons'], workspace,
+                    CELLSIZE, epsg, refRaster, UPPER=True, api=roadsAPI
+                )
+            else:
+                return
         
         # ******************************************************************** #
         # 4 - Area Lower than #
         # ******************************************************************** #
         elif ruleID == 4:
-            res, tm = num_selbyarea(
-                conPGSQL if not _osmdb else _osmdb,
-                osmTableData['polygons'], workspace,
-                CELLSIZE, epsg, refRaster, UPPER=False, api=roadsAPI
-            )
+            if nomenclature != "GLOBE_LAND_30":
+                res, tm = num_selbyarea(
+                    conPGSQL if not _osmdb else _osmdb,
+                    osmTableData['polygons'], workspace,
+                    CELLSIZE, epsg, refRaster, UPPER=False, api=roadsAPI
+                )
+            else:
+                return
         
         # ******************************************************************** #
         # 5 - Get data from lines table (railway | waterway) #
@@ -310,8 +317,10 @@ def osm2lulc(osmdata, nomenclature, refRaster, lulcRst,
         3  : ('proj_data', time_e - time_d),
         4  : ('rule_1', timeCheck[1]['total'], timeCheck[1]['detailed']),
         5  : ('rule_2', timeCheck[2]['total'], timeCheck[2]['detailed']),
-        6  : ('rule_3', timeCheck[3]['total'], timeCheck[3]['detailed']),
-        7  : ('rule_4', timeCheck[4]['total'], timeCheck[4]['detailed']),
+        6  : None if 3 not in timeCheck else (
+            'rule_3', timeCheck[3]['total'], timeCheck[3]['detailed']),
+        7  : None if 4 not in timeCheck else (
+            'rule_4', timeCheck[4]['total'], timeCheck[4]['detailed']),
         8  : ('rule_5', timeCheck[5]['total'], timeCheck[5]['detailed']),
         9  : None if 7 not in timeCheck else (
             'rule_7', timeCheck[7]['total'], timeCheck[7]['detailed']),

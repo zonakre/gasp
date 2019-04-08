@@ -1,3 +1,0 @@
-"""
-OGR Analysis tools
-"""

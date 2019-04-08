@@ -16,7 +16,7 @@ def mean_rst_by_polygon(polygons, raster, work, resultShp):
     from gasp.cpu.arcg.lyr          import feat_lyr, rst_lyr
     from gasp.prop.rst              import rst_stats
     from gasp.cpu.arcg.mng.fld      import add_field
-    from gasp.cpu.arcg.mng.gen      import copy_features
+    from gasp.mng.gen               import copy_feat
     from gasp.cpu.arcg.anls.exct    import select_by_attr
     from gasp.cpu.arcg.mng.rst.proc import clip_raster
     
@@ -30,7 +30,7 @@ def mean_rst_by_polygon(polygons, raster, work, resultShp):
     # Do it! #
     # ###### #
     # Copy the Input
-    poly_copy = copy_features(polygons, resultShp)
+    poly_copy = copy_feat(polygons, resultShp, gisApi='arcpy')
     # Create Layers
     lyrShp = feat_lyr(poly_copy)
     lyrRst = rst_lyr(raster)

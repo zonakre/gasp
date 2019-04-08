@@ -34,16 +34,16 @@ def rnd_points_with_dist_from_points(otherPnt, rndPnt, NPnt,
     import os
     from gasp.oss                 import get_filename
     from gasp.cpu.arcg.anls.ovlay import erase
-    from gasp.cpu.arcg.anls.prox  import Buffer
+    from gasp.anls.prox.bf        import _buffer
     
     WORKSPACE = os.path.dirname(rndPnt)
     
     # Create Buffer
-    bfShp = Buffer(
-        otherPnt,os.path.join(
+    bfShp = _buffer(
+        otherPnt, distFromOtherPnt, os.path.join(
             WORKSPACE, "{}_buffer.shp".format(get_filename(otherPnt))
         ),
-        distFromOtherPnt, dissolve="ALL"
+        dissolve="ALL", api='arcpy'
     )
     
     # Erase Boundary deleting areas where we want no points

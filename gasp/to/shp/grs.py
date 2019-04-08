@@ -55,7 +55,7 @@ def grs_to_shp(inLyr, outLyr, geomType, lyrN=1, asCMD=True, asMultiPart=None):
     GRASS Vector to Shape File
     """
     
-    from gasp.cpu.grs import VectorialDrivers
+    from gasp.prop.ff import VectorialDrivers
     from gasp.oss     import get_fileformat
     
     vecDriv = VectorialDrivers()

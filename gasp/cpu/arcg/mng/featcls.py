@@ -10,7 +10,7 @@ def create_feat_class(feature_class, geom, prj):
     import os
     
     if type(prj) == int:
-        from gasp.fm.api.srorg import get_wkt_esri
+        from gasp.web.srorg import get_wkt_esri
         __prj = get_wkt_esri(prj)
     
     else:

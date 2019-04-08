@@ -23,7 +23,7 @@ def create_featdts(geodb, name, epsg_code):
     """
     
     
-    from gasp.fm.api.srorg import get_wkt_esri
+    from gasp.web.srorg import get_wkt_esri
     
     arcpy.CreateFeatureDataset_management(
         geodb, name,

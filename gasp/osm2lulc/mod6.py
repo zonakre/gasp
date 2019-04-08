@@ -13,17 +13,15 @@ def rst_pnt_to_build(osmLink, pntTable, polyTable, api_db='SQLITE'):
     """
     
     import datetime
+    from gasp.sql.mng.tbl    import row_num as cnt_row
+    from gasp.fm.sql         import query_to_df
     if api_db == 'POSTGIS':
-        from gasp.cpu.psql.i import get_row_number as cnt_row
-        from gasp.fm.psql    import query_to_df as sqlq_to_df
         from gasp.to.shp.grs import psql_to_grs as db_to_shp
     else:
-        from gasp.fm.sqLite  import sqlq_to_df
         from gasp.to.shp.grs import sqlite_to_shp as db_to_shp
-        from gasp.sqLite.i   import count_rows_in_query as cnt_row
-    from gasp.anls.ovlay     import sgbd_get_feat_within
-    from gasp.anls.ovlay     import sgbd_get_feat_not_within
-    from gasp.to.rst.grs     import shp_to_raster
+    from gasp.sql.anls.ovlay import sgbd_get_feat_within
+    from gasp.sql.anls.ovlay import sgbd_get_feat_not_within
+    from gasp.to.rst         import shp_to_raster
     
     time_a = datetime.datetime.now().replace(microsecond=0)
     new_build = sgbd_get_feat_within(
@@ -55,7 +53,8 @@ def rst_pnt_to_build(osmLink, pntTable, polyTable, api_db='SQLITE'):
     time_c = datetime.datetime.now().replace(microsecond=0)
     
     resLayers = {}
-    N11 = cnt_row(osmLink, yes_build)
+    N11 = cnt_row(osmLink, yes_build,
+        api='psql' if api_db == 'POSTGIS' else 'sqlite')
     time_d = datetime.datetime.now().replace(microsecond=0)
     
     if N11:
@@ -66,7 +65,8 @@ def rst_pnt_to_build(osmLink, pntTable, polyTable, api_db='SQLITE'):
         time_f = datetime.datetime.now().replace(microsecond=0)
         
         # To raster
-        rstBuild11 = shp_to_raster(grsBuild11, "rst_builds11", 11, as_cmd=True)
+        rstBuild11 = shp_to_raster(
+            grsBuild11, 11, None, None, "rst_builds11", api="grass")
         time_g = datetime.datetime.now().replace(microsecond=0)
         
         resLayers[11] = [rstBuild11]
@@ -75,8 +75,9 @@ def rst_pnt_to_build(osmLink, pntTable, polyTable, api_db='SQLITE'):
         time_f = None; time_g = None
     
     # Add data into GRASS GIS
-    lulcCls = sqlq_to_df(
-        osmLink, "SELECT cls FROM {} GROUP BY cls".format(new_build)
+    lulcCls = query_to_df(
+        osmLink, "SELECT cls FROM {} GROUP BY cls".format(new_build),
+        db_api='psql' if api_db == 'POSTGIS' else 'sqlite'
     ).cls.tolist()
     
     timeGasto = {
@@ -96,7 +97,8 @@ def rst_pnt_to_build(osmLink, pntTable, polyTable, api_db='SQLITE'):
         time_y = datetime.datetime.now().replace(microsecond=0)
         
         rstb = shp_to_raster(
-            shp, "rst_nbuild_{}".format(str(cls)), int(cls), as_cmd=True
+            shp, int(cls), None, None, "rst_nbuild_{}".format(str(cls)),
+            api="grass"
         )
         time_z = datetime.datetime.now().replace(microsecond=0)
         
@@ -122,17 +124,15 @@ def vector_assign_pntags_to_build(osmdb, pntTable, polyTable, apidb='SQLITE'):
     """
     
     import datetime
+    from gasp.sql.mng.tbl    import row_num as cnt_row
     if apidb != "POSTGIS":
-        from gasp.sqLite.i      import count_rows_in_query as cnt_row
-        from gasp.to.shp.grs    import sqlite_to_shp as db_to_shp
+        from gasp.to.shp.grs import sqlite_to_shp as db_to_shp
     else:
-        from gasp.cpu.psql.i    import get_row_number as cnt_row
-        from gasp.to.shp.grs    import psql_to_grs as db_to_shp
-    from gasp.anls.ovlay        import sgbd_get_feat_within
-    from gasp.anls.ovlay        import sgbd_get_feat_not_within
-    from gasp.cpu.grs.mng.genze import dissolve
-    
-    from gasp.cpu.grs.mng.tbl   import add_table
+        from gasp.to.shp.grs import psql_to_grs as db_to_shp
+    from gasp.sql.anls.ovlay import sgbd_get_feat_within
+    from gasp.sql.anls.ovlay import sgbd_get_feat_not_within
+    from gasp.mng.genze      import dissolve
+    from gasp.mng.grstbl     import add_table
     
     time_a = datetime.datetime.now().replace(microsecond=0)
     new_build = sgbd_get_feat_within(
@@ -162,9 +162,9 @@ def vector_assign_pntags_to_build(osmdb, pntTable, polyTable, apidb='SQLITE'):
     )
     time_c = datetime.datetime.now().replace(microsecond=0)
     
-    N12 = cnt_row(osmdb, new_build)
+    N12 = cnt_row(osmdb, new_build, api='psql' if apidb == 'POSTGIS' else 'sqlite')
     time_d = datetime.datetime.now().replace(microsecond=0)
-    N11 = cnt_row(osmdb, yes_build)
+    N11 = cnt_row(osmdb, yes_build, api='psql' if apidb == 'POSTGIS' else 'sqlite')
     time_e = datetime.datetime.now().replace(microsecond=0)
     
     if N11:
@@ -175,7 +175,7 @@ def vector_assign_pntags_to_build(osmdb, pntTable, polyTable, apidb='SQLITE'):
         # Dissolve
         dissVect = dissolve(
             grsBuild11, "dss_{}".format(grsBuild11),
-            field='cls', asCMD=True
+            'cls', api="grass"
         )
         
         add_table(dissVect, None, lyrN=1, asCMD=True)
@@ -193,7 +193,7 @@ def vector_assign_pntags_to_build(osmdb, pntTable, polyTable, apidb='SQLITE'):
         # Dissolve
         dissVect12 = dissolve(
             grsBuild12, "dss_{}".format(grsBuild12),
-            field='cls', asCMD=True
+            'cls', api="grass"
         )
         
         add_table(dissVect12, None, lyrN=1, asCMD=True)
@@ -225,16 +225,15 @@ def num_assign_builds(osmLink, pntTbl, polTbl, folder, cells, srscode, rstT,
     """
     
     import datetime
-    from threading                  import Thread
+    from threading           import Thread
     if apidb == 'SQLITE':
-        from gasp.fm.sqLite         import sqlq_to_df
-        from gasp.cpu.gdl.anls.exct import sel_by_attr
+        from gasp.anls.exct  import sel_by_attr
     else:
-        from gasp.fm.psql           import query_to_df as sqlq_to_df
-        from gasp.to.shp            import psql_to_shp as sel_by_attr
-    from gasp.anls.ovlay            import sgbd_get_feat_within
-    from gasp.anls.ovlay            import sgbd_get_feat_not_within
-    from gasp.to.rst.gdl            import shp_to_raster
+        from gasp.to.shp     import psql_to_shp as sel_by_attr
+    from gasp.sql.anls.ovlay import sgbd_get_feat_within
+    from gasp.sql.anls.ovlay import sgbd_get_feat_not_within
+    from gasp.fm.sql         import query_to_df
+    from gasp.to.rst         import shp_to_raster
     
     time_a = datetime.datetime.now().replace(microsecond=0)
     build12 = sgbd_get_feat_within(
@@ -277,9 +276,9 @@ def num_assign_builds(osmLink, pntTbl, polTbl, folder, cells, srscode, rstT,
         # To Raster
         time_x = datetime.datetime.now().replace(microsecond=0)
         rstbuild = shp_to_raster(
-            buildShp, cells, 0,
+            buildShp, None, cells, 0,
             os.path.join(folder, 'rst_build_{}.tif'.format(cls)),
-            srscode, rstT
+            srscode, rstT, api='gdal'
         )
         time_y = datetime.datetime.now().replace(microsecond=0)
         
@@ -288,8 +287,9 @@ def num_assign_builds(osmLink, pntTbl, polTbl, folder, cells, srscode, rstT,
         timeGasto[33] = ('to_rst_{}'.format(cls), time_y - time_x)
     
     def build12_torst(buildTbl):
-        LulcCls = sqlq_to_df(
-            osmLink, "SELECT cls FROM {} GROUP BY cls".format(buildTbl)
+        LulcCls = query_to_df(
+            osmLink, "SELECT cls FROM {} GROUP BY cls".format(buildTbl),
+            db_api='psql' if apidb == 'POSTGIS' else 'sqlite'
         ).cls.tolist()
         
         for lulc_cls in LulcCls:
@@ -300,7 +300,8 @@ def num_assign_builds(osmLink, pntTbl, polTbl, folder, cells, srscode, rstT,
                 shpB = sel_by_attr(
                     osmLink, "SELECT * FROM {} WHERE cls={}".format(
                         buildTbl, str(lulc_cls)
-                    ), os.path.join(folder, 'nshp_build_{}.shp'.format(lulc_cls))
+                    ), os.path.join(folder, 'nshp_build_{}.shp'.format(lulc_cls)),
+                    api_gis='ogr'
                 )
             
             else:
@@ -314,9 +315,9 @@ def num_assign_builds(osmLink, pntTbl, polTbl, folder, cells, srscode, rstT,
             
             # To RST
             brst = shp_to_raster(
-                shpB, cells, 0,
+                shpB, None, cells, 0,
                 os.path.join(folder, 'nrst_build_{}.tif'.format(lulc_cls)),
-                srscode, rstT
+                srscode, rstT, api='gdal'
             )
             time_o = datetime.datetime.now().replace(microsecond=0)
             

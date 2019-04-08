@@ -136,7 +136,7 @@ def txt_to_pnt(inTxt, pntShp, srs):
     Text file to Point Feature Class
     """
     
-    from gasp.fm.api.srorg     import get_wkt_esri
+    from gasp.web.srorg        import get_wkt_esri
     from gasp.arcg.mng.featcls import create_feat_class
     
     # Create new feature class
@@ -216,7 +216,7 @@ def gdb_to_shp(workspace, outworkspace):
     """
     
     import os
-    from gasp.arcg.mng.gen import copy_features
+    from gasp.mng.gen import copy_feat
     
     # List GeoDatabases
     lst_gdb = arcpy.ListWorkspaces(workspace_type="FileGDB")
@@ -236,11 +236,11 @@ def gdb_to_shp(workspace, outworkspace):
     for gdb in dic_gdb:
         for dt in dic_gdb[gdb]:
             for fc in dic_gdb[gdb][dt]:
-                copy_features(
+                copy_feat(
                     os.path.join(gdb, dt, fc),
                     os.path.join(outworkspace, "{}_{}.shp".format(
                         os.path.splitext(os.path.basename(gdb))[0],
                         fc
-                    ))
+                    )), gisApi='arcpy'
                 )
 

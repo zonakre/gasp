@@ -8,21 +8,20 @@ def grs_rst(osmLink, polyTbl, api='SQLITE'):
     """
     
     import datetime
+    from gasp.fm.sql import query_to_df
     if api == 'POSTGIS':
-        from gasp.fm.psql    import query_to_df as sqlq_to_df
         from gasp.to.shp.grs import psql_to_grs as db_to_grs
     else:
-        from gasp.fm.sqLite  import sqlq_to_df
         from gasp.to.shp.grs import sqlite_to_shp as db_to_grs
-    from gasp.to.rst.grs     import shp_to_raster
+    from gasp.to.rst         import shp_to_raster
     
     # Get Classes 
     time_a = datetime.datetime.now().replace(microsecond=0)
-    lulcCls = sqlq_to_df(osmLink, (
+    lulcCls = query_to_df(osmLink, (
         "SELECT selection FROM {} "
         "WHERE selection IS NOT NULL "
         "GROUP BY selection"
-    ).format(polyTbl)).selection.tolist()
+    ).format(polyTbl), db_api='psql' if api == 'POSTGIS' else 'sqlite').selection.tolist()
     time_b = datetime.datetime.now().replace(microsecond=0)
     
     timeGasto = {0 : ('check_cls', time_b - time_a)}
@@ -40,8 +39,8 @@ def grs_rst(osmLink, polyTbl, api='SQLITE'):
         time_y = datetime.datetime.now().replace(microsecond=0)
         
         grsRst = shp_to_raster(
-            grsVect, "rst_rule1_{}".format(str(cls)),
-            int(cls), as_cmd=True
+            grsVect, int(cls), None, None, "rst_rule1_{}".format(str(cls)),
+            api='grass'
         )
         time_z = datetime.datetime.now().replace(microsecond=0)
         
@@ -60,21 +59,21 @@ def grs_vector(dbcon, polyTable, apidb='SQLITE'):
     """
     
     import datetime
-    from gasp.cpu.grs.mng.genze import dissolve
-    from gasp.cpu.grs.mng.tbl   import add_table
-    
+    from gasp.mng.genze      import dissolve
+    from gasp.mng.grstbl     import add_table
+    from gasp.sql.mng.tbl    import row_num as cont_row
     if apidb != 'POSTGIS':
-        from gasp.to.shp.grs    import sqlite_to_shp as db_to_grs
-        from gasp.sqLite.i      import count_rows_in_query as cont_row
+        from gasp.to.shp.grs import sqlite_to_shp as db_to_grs
     else:
-        from gasp.to.shp.grs    import psql_to_grs   as db_to_grs
-        from gasp.cpu.psql.i    import get_row_number as cont_row
+        from gasp.to.shp.grs import psql_to_grs   as db_to_grs
     
     WHR = "selection IS NOT NULL"
     
     # Check if we have interest data
     time_a = datetime.datetime.now().replace(microsecond=0)
-    N = cont_row(dbcon, polyTable, where=WHR)
+    N = cont_row(dbcon, polyTable, where=WHR,
+        api='psql' if apidb == 'POSTGIS' else 'sqlite'
+    )
     time_b = datetime.datetime.now().replace(microsecond=0)
     
     if not N: return None, {0 : ('count_rows', time_b - time_a)}
@@ -86,7 +85,7 @@ def grs_vector(dbcon, polyTable, apidb='SQLITE'):
     time_c = datetime.datetime.now().replace(microsecond=0)
     
     dissVect = dissolve(
-        grsVect, "diss_sel_rule", field="selection", asCMD=True)
+        grsVect, "diss_sel_rule", field="selection", api="grass")
     
     add_table(dissVect, None, lyrN=1, asCMD=True)
     time_d = datetime.datetime.now().replace(microsecond=0)
@@ -104,23 +103,24 @@ def num_selection(osmcon, polyTbl, folder,
     Select and Convert to Raster
     """
     
-    import datetime;                import os
-    from threading                  import Thread
+    import datetime;        import os
+    from threading          import Thread
     if api == 'SQLITE':
-        from gasp.fm.sqLite         import sqlq_to_df
-        from gasp.cpu.gdl.anls.exct import sel_by_attr
+        from gasp.anls.exct import sel_by_attr
     else:
-        from gasp.fm.psql           import query_to_df as sqlq_to_df
-        from gasp.to.shp            import psql_to_shp as sel_by_attr
-    from gasp.to.rst.gdl            import shp_to_raster
+        from gasp.to.shp    import psql_to_shp as sel_by_attr
+    from gasp.fm.sql        import query_to_df
+    from gasp.to.rst        import shp_to_raster
     
     # Get classes in data
     time_a = datetime.datetime.now().replace(microsecond=0)
-    classes = sqlq_to_df(osmcon, (
+    classes = query_to_df(osmcon, (
         "SELECT selection FROM {} "
         "WHERE selection IS NOT NULL "
         "GROUP BY selection"
-    ).format(polyTbl)).selection.tolist()
+    ).format(
+        polyTbl
+    ), db_api='psql' if api == 'POSTGIS' else 'sqlite').selection.tolist()
     time_b = datetime.datetime.now().replace(microsecond=0)
     
     timeGasto = {0 : ('check_cls', time_b - time_a)}
@@ -133,7 +133,8 @@ def num_selection(osmcon, polyTbl, folder,
         if api == 'SQLITE':
             shp = sel_by_attr(
                 osmcon, SQL_Q.format(lc=str(CLS), tbl=polyTbl),
-                os.path.join(folder, 'sel_{}.shp'.format(str(CLS)))
+                os.path.join(folder, 'sel_{}.shp'.format(str(CLS))),
+                api_gis='ogr'
             )
         else:
             shp = sel_by_attr(
@@ -144,9 +145,9 @@ def num_selection(osmcon, polyTbl, folder,
         time_y = datetime.datetime.now().replace(microsecond=0)
         
         rstCls = shp_to_raster(
-            shp, cellsize, 0,
+            shp, None, cellsize, 0,
             os.path.join(folder, 'sel_{}.tif'.format(str(CLS))),
-            srscode, rstTemplate
+            epsg=srscode, rst_template=rstTemplate, api='gdal'
         )
         time_z = datetime.datetime.now().replace(microsecond=0)
         
@@ -172,17 +173,17 @@ def arcg_selection(db, polTbl, fld):
     Select, Dissolve and Reproject using ArcGIS
     """
     
-    import datetime;            import os
-    from gasp.mng.genze         import dissolve
-    from gasp.fm.sqLite         import sqlq_to_df
-    from gasp.cpu.gdl.anls.exct import sel_by_attr
+    import datetime;    import os
+    from gasp.mng.genze import dissolve
+    from gasp.fm.sql    import query_to_df
+    from gasp.anls.exct import sel_by_attr
     
     # Get LULC Classes
     time_a = datetime.datetime.now().replace(microsecond=0)
-    lulcCls = sqlq_to_df(db, (
+    lulcCls = query_to_df(db, (
         "SELECT selection FROM {} "
         "WHERE selection IS NOT NULL GROUP BY selection"
-    ).format(polTbl)).selection.tolist()
+    ).format(polTbl), db_api='sqlite').selection.tolist()
     time_b = datetime.datetime.now().replace(microsecond=0)
     
     timeGasto = {0 : ('check_cls', time_b - time_a)}
@@ -195,7 +196,8 @@ def arcg_selection(db, polTbl, fld):
         time_x = datetime.datetime.now().replace(microsecond=0)
         shp = sel_by_attr(
             db, SQL.format(polTbl, str(cls)),
-            os.path.join(fld, 'rule1_{}.shp'.format(cls))
+            os.path.join(fld, 'rule1_{}.shp'.format(cls)),
+            api_gis='ogr'
         )
         time_y = datetime.datetime.now().replace(microsecond=0)
         
