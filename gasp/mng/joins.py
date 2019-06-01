@@ -211,7 +211,7 @@ def joinLines_by_spatial_rel_raster(mainLines, mainId, joinLines,
     from gasp.session   import run_grass
     from gasp.oss       import get_filename
     from gasp.oss.ops   import create_folder
-    from gasp.mng.ext   import shpextent_to_boundary
+    from gasp.mng.ext   import shpext_to_boundary
     from gasp.mng.joins import join_dfs
     from gasp.mng.df    import df_groupBy
     from gasp.to.rst    import shp_to_raster
@@ -223,7 +223,7 @@ def joinLines_by_spatial_rel_raster(mainLines, mainId, joinLines,
     ))
     
     # Create boundary file
-    boundary = shpextent_to_boundary(
+    boundary = shpext_to_boundary(
         mainLines, os.path.join(workspace, "bound.shp"),
         epsg
     )
