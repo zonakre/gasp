@@ -172,7 +172,7 @@ def splite_buffer(db, table, dist, geomField, outTbl,
     )
     
     if outTblIsFile:
-        from gasp.exct import sel_by_attr
+        from gasp.anls.exct import sel_by_attr
         
         sel_by_attr(db, sql, outTbl, api_gis='ogr')
     

@@ -97,7 +97,7 @@ def osm_project(osmDb, srs_epsg, api='SQLITE', isGlobeLand=None):
     else:
         from gasp.sql.mng.qw   import ntbl_by_query as proj
         from gasp.sql.mng.geom import add_idx_to_geom
-    from .var import osmTableData, GEOM_AREA
+    from gasp.osm2lulc.var import osmTableData, GEOM_AREA
     
     osmtables = {}
     

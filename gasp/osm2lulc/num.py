@@ -4,7 +4,7 @@ OSM2LULC using Numpy
 
 
 def osm2lulc(osmdata, nomenclature, refRaster, lulcRst,
-             epsg=3857, overwrite=None, dataStore=None, roadsAPI='SQLITE'):
+             overwrite=None, dataStore=None, roadsAPI='POSTGIS'):
     """
     Convert OSM data into Land Use/Land Cover Information
     
@@ -25,7 +25,8 @@ def osm2lulc(osmdata, nomenclature, refRaster, lulcRst,
     # Dependencies #
     # ************************************************************************ #
     from gasp.fm.rst         import rst_to_array
-    from gasp.prop.rst       import get_cellsize
+    from gasp.prop.ff        import check_isRaster
+    from gasp.prop.rst       import get_cellsize, get_epsg_raster
     from gasp.oss.ops        import create_folder, copy_file
     if roadsAPI == 'POSTGIS':
         from gasp.sql.mng.db     import create_db
@@ -46,13 +47,7 @@ def osm2lulc(osmdata, nomenclature, refRaster, lulcRst,
     if not os.path.exists(os.path.dirname(lulcRst)):
         raise ValueError('{} does not exist!'.format(os.path.dirname(lulcRst)))
     
-    conPGSQL = json.load(open(os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        'con-postgresql.json'
-    ), 'r')) if roadsAPI == 'POSTGIS' else None
-    
     time_a = datetime.datetime.now().replace(microsecond=0)
-    from gasp.osm2lulc.var import osmTableData, PRIORITIES
     
     workspace = os.path.join(os.path.dirname(
         lulcRst), 'num_osmto') if not dataStore else dataStore
@@ -66,7 +61,45 @@ def osm2lulc(osmdata, nomenclature, refRaster, lulcRst,
     else:
         create_folder(workspace, overwrite=None)
     
-    CELLSIZE = get_cellsize(refRaster, xy=False, gisApi='gdal')
+    conPGSQL = json.load(open(os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        'con-postgresql.json'
+    ), 'r')) if roadsAPI == 'POSTGIS' else None
+    
+    # Check if refRaster is really a Raster
+    isRst = check_isRaster(refRaster)
+    if not isRst:
+        from gasp.prop.ff import check_isShp
+        
+        if not check_isShp(refRaster):
+            raise ValueError((
+                'refRaster File has an invalid file format. Please give a file '
+                'with one of the following extensions: '
+                'shp, gml, json, kml, tif or img'
+            ))
+        
+        else:
+            # Convert shp to raster
+            from gasp.to.rst import shp_to_raster
+            
+            refRaster = shp_to_raster(
+                refRaster, None, 2, -1, os.path.join(
+                    workspace, 'ref_rst.tif'
+                ), api='gdal'
+            )
+            
+            CELLSIZE = 2
+    
+    else:
+        CELLSIZE = get_cellsize(refRaster, xy=False, gisApi='gdal')
+    
+    # Get EPSG of Reference Raster
+    epsg = get_epsg_raster(refRaster)
+    if not epsg:
+        raise ValueError('Cannot get epsg code of ref raster')
+    
+    from gasp.osm2lulc.var import osmTableData, PRIORITIES
+    
     time_b = datetime.datetime.now().replace(microsecond=0)
     # ************************************************************************ #
     # Convert OSM file to SQLITE DB or to POSTGIS DB #

@@ -136,35 +136,6 @@ def get_geom_type(shp, name=True, py_cls=None, geomCol="geometry",
         raise ValueError('The api {} is not available'.format(gisApi))
 
 
-def get_shp_sref(shp):
-    """
-    Get Spatial Reference Object from Feature Class/Lyr
-    """
-    
-    from osgeo        import ogr
-    from gasp.prop.ff import drv_name
-    
-    if type(shp) == ogr.Layer:
-        lyr = shp
-        
-        c = 0
-    
-    else:
-        data = ogr.GetDriverByName(
-            drv_name(shp)).Open(shp)
-        
-        lyr = data.GetLayer()
-        c = 1
-    
-    spref = lyr.GetSpatialRef()
-    
-    if c:
-        del lyr
-        data.Destroy()
-    
-    return spref
-
-
 def get_centroid_boundary(shp, isFile=None):
     """
     Return centroid (OGR Point object) of a Boundary (layer with a single

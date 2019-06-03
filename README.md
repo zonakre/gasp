@@ -18,7 +18,42 @@ GASP Components
 Installation
 ====================
 
-TODO
+### Install dependencies: ###
+	
+- [Ubuntu/Debian;](/doc/DOC_DEBIAN.md)
+
+### Install GASP: ###
+
+1 - Clone GASP repository from github.com:
+
+	user = "$(whoami)"
+	mkdir /home/$user/xpto
+	cd /home/$user/xpto
+	git clone https://github.com/jasp382/gasp.git
+
+2 - Set some environment variables:
+
+	echo "export PGPASSWORD=yourpostgresqlpassword" | sudo tee --append /home/$user/.bashrc
+	echo "export GDALDATA=/usr/share/gdal" | sudo tee --append /home/$user/.bashrc
+
+3 - Edit /../../gasp/gasp/osm2lulc/con-postgresql.json file according your PostgreSQL configuration;
+
+4 - Replace default osmconf.ini file in your GDAL-DATA configuration folder:
+
+	sudo rm /usr/share/gdal/osmconf.ini
+	sudo cp /home/$user/xpto/gasp/gasp/osm2lulc/osmconf-gdal.ini /usr/share/gdal/osmconf.ini
+
+5 - Create Python Virtual Environment:
+
+	sudo -H pip install virtualenv
+	cd /home/$user/xpto
+	virtualenv gasp_env
+
+6 - Install gasp in the created virtual environment:
+
+	source gasp_env/bin/activate
+	cd /home/$user/xpto/gasp
+	python setup.py install
 
 Documentation
 ====================

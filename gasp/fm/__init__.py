@@ -88,7 +88,7 @@ def tbl_to_obj(tblFile, sheet=None, useFirstColAsIndex=None,
         
         tableDf = geopandas.read_file(tblFile)
         
-        if output:
+        if output != 'df':
             if not geomCol:
                 for c in tableDf.columns.values:
                     if c == 'geometry' or c == 'geom':
@@ -126,7 +126,7 @@ def tbl_to_obj(tblFile, sheet=None, useFirstColAsIndex=None,
             if delCols:
                 tableDf.drop(delCols, axis=1, inplace=True)
     
-    if output:
+    if output != 'df':
         if output == 'dict':
             orientation = "index" if not colsAsArray else "list"
         

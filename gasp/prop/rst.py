@@ -434,5 +434,5 @@ def get_epsg_raster(rst):
     d    = gdal.Open(rst)
     proj = osr.SpatialReference(wkt=d.GetProjection())
     
-    return int(proj.GetAttrValue('AUTHORITY', 1))
+    return int(str(proj.GetAttrValue(str('AUTHORITY'), 1)))
 

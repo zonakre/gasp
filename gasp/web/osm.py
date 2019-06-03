@@ -16,7 +16,7 @@ def download_by_boundary(input_boundary, output_osm, epsg, area_threshold=None,
     from gasp.web       import get_file
     
     # Check number of features
-    number_feat = feat_count(input_boundary)
+    number_feat = feat_count(input_boundary, gisApi='ogr')
     if number_feat != 1:
         raise ValueError((
             'Your boundary has more than one feature. '
@@ -25,7 +25,7 @@ def download_by_boundary(input_boundary, output_osm, epsg, area_threshold=None,
     
     # Check boundary area
     if area_threshold:
-        from gasp.cpu.gdl import area_to_dic
+        from gasp.prop.feat import area_to_dic
         d_area = area_to_dic(input_boundary)
         if d_area[0] > area_threshold:
             raise ValueError(

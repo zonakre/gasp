@@ -7,13 +7,13 @@ File Format Properties
 
 def vector_formats():
     return [
-        '.shp'
+        '.shp', '.gml', '.json', '.geojson', '.kml'
     ]
 
 
 def raster_formats():
     return [
-        '.tiff', '.tif', '.img', '.nc', 'ecw', '.jpg'
+        '.tiff', '.tif', '.img', '.nc', 'ecw', '.jpg', '.png', '.vrt'
     ]
 
 
@@ -25,6 +25,19 @@ def check_isRaster(_file):
     file_ext = get_fileformat(_file)
     
     if file_ext not in rst_lst:
+        return None
+    else:
+        return True
+
+
+def check_isShp(_file):
+    from gasp.oss import get_fileformat
+    
+    lst = vector_formats()
+    
+    file_ext = get_fileformat(_file)
+    
+    if file_ext not in lst:
         return None
     else:
         return True

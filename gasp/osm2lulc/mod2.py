@@ -147,7 +147,7 @@ def grs_vec_roads(osmdb, lineTbl, polyTbl):
     time_h = datetime.datetime.now().replace(microsecond=0)
     
     # Dissolve Roads
-    roadsDiss = dissolve(roadsBf, "diss_roads", field="roads", api="grass")
+    roadsDiss = dissolve(roadsBf, "diss_roads", "roads", api="grass")
     
     add_table(roadsDiss, None, lyrN=1, asCMD=True)
     time_i = datetime.datetime.now().replace(microsecond=0)
@@ -392,95 +392,6 @@ def num_roads(osmdata, nom, lineTbl, polyTbl, folder, cellsize, srs, rstTemplate
     timeGasto[6] = ('sanitize_roads', time_z - time_x)
     
     return {int(LULC_CLS) : newRaster}, timeGasto
-
-
-def arc_roadsrule(osmDb, lineTbl, polyTbl, folder):
-    """
-    Select Roads and Transform them into polygons
-    """
-    
-    import datetime
-    from gasp.anls.exct    import sel_by_attr
-    from gasp.sql.mng.tbl  import row_num
-    from gasp.anls.prox.bf import _buffer
-    
-    # Roads to ArcGIS
-    time_a = datetime.datetime.now().replace(microsecond=0)
-    NR = row_num(osmDb, lineTbl, where="roads IS NOT NULL", api='sqlite')
-    time_b = datetime.datetime.now().replace(microsecond=0)
-    
-    if not NR: return None, {0 : ('count_rows_roads', time_b - time_a)}
-    
-    # Export all roads
-    allRoads = sel_by_attr(osmDb, (
-        "SELECT roads, bf_roads, geometry "
-        "FROM {} WHERE roads IS NOT NULL"
-    ).format(lineTbl), os.path.join(folder, 'all_roads.shp'), api_gis='ogr')
-    time_c = datetime.datetime.now().replace(microsecond=0)
-    
-    # Export Buildings
-    NB = row_num(osmDb, polyTbl, where="building IS NOT NULL", api='sqlite')
-    time_d = datetime.datetime.now().replace(microsecond=0)
-    
-    if NB:
-        from gasp.arcg.anls.prox import near_anls
-        
-        builds = sel_by_attr(osmDb, (
-            "SELECT geometry FROM {} "
-            "WHERE building IS NOT NULL"
-        ), os.path.join(folder, "all_builds.shp"), api_gis='ogr')
-        time_e = datetime.datetime.now().replace(microsecond=0)
-        
-        near_anls(allRoads, builds, searchRadius=12)
-        
-        # Update table
-        
-    
-    
-    # Execute near
-    if allBuildings:
-        near_anls(allRoads, allBuildings, searchRadius=12)
-    
-        # Create Buffer for roads near buildings
-        nearBuildRoadsLnh = select_by_attr(
-            allRoads, "NEAR_FID <> -1",
-            os.path.join(WORK, 'roads_near')
-        )
-    
-        nearBuildRoads = _buffer(
-            nearBuildRoadsLnh, "NEAR_DIST",
-            os.path.join(WORK, 'roads_bf_near'), dissolve="ALL", api='arcpy'
-        )
-        
-        L.append(nearBuildRoads)
-    
-    for dist in distInstances:
-        # Buffer and export
-        filterDf = osmToSelect[osmToSelect[BF_COL] == dist]
-        
-        Q = "{}" if not allBuildings else "({}) AND NEAR_FID = -1"
-        
-        rdvShp = select_by_attr(
-            allRoads,
-            Q.format(str(filterDf[VALUE_COL].str.cat(sep=" OR "))),
-            os.path.join(WORK, "roads_{}".format(str(dist)))
-        )
-        
-        if not feat_count(rdvShp, gisApi='arcpy'): continue
-        
-        roadsShp = Buffer(
-            rdvShp, os.path.join(WORK, "roads_bf_{}".format(str(dist))),
-            str(int(dist)), dissolve="ALL"
-        )
-        
-        L.append(roadsShp)
-        
-        delete(rdvShp)
-    
-    delete(allBuildings)
-    
-    LULC_CLS = 1221 if nomenclature != 'GLOBE_LAND_30' else 801
-    return {LULC_CLS : L}
 
 
 def pg_num_roads(osmLink, nom, lnhTbl, polyTbl, folder, cellsize, srs, rstT):

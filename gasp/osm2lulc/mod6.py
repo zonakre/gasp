@@ -3,7 +3,7 @@ Rule 6
 """
 
 import os
-from gasp.osm2lulc.var   import DB_SCHEMA
+from gasp.osm2lulc.var import DB_SCHEMA
 
 def rst_pnt_to_build(osmLink, pntTable, polyTable, api_db='SQLITE'):
     """
@@ -346,85 +346,4 @@ def num_assign_builds(osmLink, pntTbl, polTbl, folder, cells, srscode, rstT,
         del resLyr[33]
     
     return resLyr, timeGasto
-
-
-def arc_pnt_to_build(Nomenclature, pntTbl, polyTbl):
-    """
-    Replace buildings with tag yes using the info in the Points Layer
-    
-    Only used for URBAN ATLAS and CORINE LAND COVER
-    """
-    
-    from gasp.osm2lulc.utils     import osm_features_by_rule
-    from gasp.cpu.arcg.anls.exct import select_by_attr
-    from gasp.cpu.arcg.anls.prox import near_anls
-    from gasp.prop.feat          import feat_count
-    from gasp.cpu.arcg.mng.fld   import del_field, list_fields
-    from gasp.cpu.arcg.mng.gen   import delete
-    
-    KEY_COL   = DB_SCHEMA["OSM_FEATURES"]["OSM_KEY"]
-    VALUE_COL = DB_SCHEMA["OSM_FEATURES"]["OSM_VALUE"]
-    LULC_COL  = DB_SCHEMA[Nomenclature]["CLS_FK"]
-    
-    # Get OSM Features that will be used in this rule
-    osmToSelect_poly = osm_features_by_rule(Nomenclature, "buildings")
-    
-    # Get OSM Features to extract from Polygons layer
-    osmToSelect_poly[VALUE_COL] = osmToSelect_poly[KEY_COL] + "='" + \
-        osmToSelect_poly[VALUE_COL] + "'"
-    
-    # Get OSM Features to extract from Points layer
-    osmToSelect_pnt = osm_features_by_rule(Nomenclature, "selection")
-    osmToSelect_pnt = osmToSelect_pnt[osmToSelect_pnt[LULC_COL] == 12]
-    osmToSelect_pnt = osmToSelect_pnt[osmToSelect_pnt[KEY_COL] == 'building']
-    osmToSelect_pnt[VALUE_COL] = osmToSelect_pnt[KEY_COL] + "='" + \
-        osmToSelect_pnt[VALUE_COL] + "'"
-    
-    WORK = os.path.dirname(polyTbl)
-    # Export Buildings
-    buildUnk = select_by_attr(
-        polyTbl, str(osmToSelect_poly[VALUE_COL].str.cat(sep=" OR ")),
-        os.path.join(WORK, "build_unk")
-    )
-    
-    if not feat_count(buildUnk, gisApi='arcpy'): return 0
-    
-    # Delete all fields in the last table
-    FLDS = [x for x in list_fields(
-        buildUnk) if x != 'OBJECTID' and x != 'SHAPE' and x != 'SHAPE_Area' and x != 'SHAPE_Length']
-    del_field(buildUnk, FLDS)
-    
-    # Export POI's
-    poiBuild = select_by_attr(
-        pntTbl, str(osmToSelect_pnt[VALUE_COL].str.cat(sep=" OR ")),
-        os.path.join(WORK, "poi_build"))
-    
-    if not feat_count(poiBuild, gisApi='arcpy'):
-        return {11 : buildUnk}
-    
-    near_anls(buildUnk, poiBuild, 1, joinData=None)
-    
-    delete(poiBuild)
-    
-    # Export Unknow Builds
-    realUnk = select_by_attr(
-        buildUnk, "NEAR_DIST <> 0",
-        os.path.join(WORK, "build_11")
-    )
-    
-    resLyr = {}
-    if feat_count(realUnk, gisApi='arcpy'):
-        resLyr[11] = realUnk
-    
-    # Export Know Builds
-    buildKnow = select_by_attr(
-        buildUnk, "NEAR_DIST = 0", os.path.join(WORK, "build_12")
-    )
-    
-    if count_feat(buildKnow, gisApi='arcpy'):
-        resLyr[12] = buildKnow
-    
-    delete(buildUnk)
-    
-    return resLyr
 

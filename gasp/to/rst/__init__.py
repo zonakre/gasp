@@ -221,7 +221,7 @@ def shp_to_raster(shp, inSource, cellsize, nodata, outRaster, epsg=None,
         from gasp.prop.ff import drv_name
     
         if not epsg:
-            from gasp.prop.feat import get_shp_sref
+            from gasp.prop.prj import get_shp_sref
             srs = get_shp_sref(shp).ExportToWkt()
         else:
             from gasp.prop.prj import epsg_to_wkt
@@ -256,7 +256,8 @@ def shp_to_raster(shp, inSource, cellsize, nodata, outRaster, epsg=None,
     
         else:
             dtRst.SetGeoTransform(geo_transform)
-        dtRst.SetProjection(srs)
+        
+        dtRst.SetProjection(str(srs))
     
         bnd = dtRst.GetRasterBand(1)
         bnd.SetNoDataValue(nodata)

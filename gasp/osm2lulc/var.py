@@ -77,3 +77,104 @@ PRIORITIES = {
 }
 
 GEOM_AREA = "geom_area"
+
+LEGEND = {
+    "URBAN_ATLAS" : {
+        1222 : ("Industrial, commercial, public, military, "
+                "private and transport units"),
+        1221 : ("Industrial, commercial, public, military, "
+                "private and transport units"),
+        11 : "Urban Fabric",
+        12 : ("Industrial, commercial, public, military, "
+              "private and transport units"),
+        13 : "Mine, dump and construction sites",
+        14 : "Artificial non-agricutural vegetated areas",
+        2 : "Agricultural, semi-natural areas, wetlands",
+        3 : "Forests",
+        5 : "Water"
+    },
+    "CORINE_LAND_COVER" : {
+        1222 : ("Industrial, commercial, public, military, "
+                "private and transport units"),
+        1221 : ("Industrial, commercial, public, military, "
+                "private and transport units"),
+        11 : "Urban Fabric",
+        12 : ("Industrial, commercial, public, military, "
+              "private and transport units"),
+        13 : "Mine, dump and construction sites",
+        14 : "Artificial non-agricutural vegetated areas",
+        2  : "Agricultural areas",
+        21 : "Arable Land",
+        22 : "Permanent crops",
+        23 : "Pastures",
+        24 : "Heterogeneous",
+        31 : "Forests",
+        32 : "Scrub and/or herbaceous vegetation associations",
+        33 : "Open spaces with little or no vegetation",
+        5  : "Water",
+        4  : "Wetlands"
+    },
+    "GLOBE_LAND_30" : {
+        801 : "Artificial surfaces",
+        802 : "Artificial surfaces",
+        80  : "Artificial surfaces",
+        60  : "Water bodies",
+        50  : "Wetland",
+        10  : "Cultivated land",
+        30  : "Grassland",
+        20  : "Forests",
+        40  : "Scrubland",
+        90  : "Bareland",
+        70  : "Tundra",
+        100 : "Permanent snow/ice"
+    },
+    "URBAN_ATLAS_NUMPY" : {
+        98 : ("Industrial, commercial, public, military, "
+                "private and transport units"),
+        99 : ("Industrial, commercial, public, military, "
+                "private and transport units"),
+        11 : "Urban Fabric",
+        12 : ("Industrial, commercial, public, military, "
+              "private and transport units"),
+        13 : "Mine, dump and construction sites",
+        14 : "Artificial non-agricutural vegetated areas",
+        2 : "Agricultural, semi-natural areas, wetlands",
+        3 : "Forests",
+        5 : "Water"
+    },
+    "CORINE_LAND_COVER_NUMPY" : {
+        98 : ("Industrial, commercial, public, military, "
+                "private and transport units"),
+        99 : ("Industrial, commercial, public, military, "
+                "private and transport units"),
+        11 : "Urban Fabric",
+        12 : ("Industrial, commercial, public, military, "
+              "private and transport units"),
+        13 : "Mine, dump and construction sites",
+        14 : "Artificial non-agricutural vegetated areas",
+        2  : "Agricultural areas",
+        21 : "Arable Land",
+        22 : "Permanent crops",
+        23 : "Pastures",
+        24 : "Heterogeneous",
+        31 : "Forests",
+        32 : "Scrub and/or herbaceous vegetation associations",
+        33 : "Open spaces with little or no vegetation",
+        5  : "Water",
+        4  : "Wetlands"
+    },
+    "GLOBE_LAND_30_NUMPY" : {
+        82  : "Artificial surfaces",
+        81  : "Artificial surfaces",
+        80  : "Artificial surfaces",
+        60  : "Water bodies",
+        50  : "Wetland",
+        10  : "Cultivated land",
+        30  : "Grassland",
+        20  : "Forests",
+        40  : "Scrubland",
+        90  : "Bareland",
+        70  : "Tundra",
+        100 : "Permanent snow/ice"
+    }
+}

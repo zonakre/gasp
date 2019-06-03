@@ -85,7 +85,7 @@ def grs_vector(dbcon, polyTable, apidb='SQLITE'):
     time_c = datetime.datetime.now().replace(microsecond=0)
     
     dissVect = dissolve(
-        grsVect, "diss_sel_rule", field="selection", api="grass")
+        grsVect, "diss_sel_rule", "selection", api="grass")
     
     add_table(dissVect, None, lyrN=1, asCMD=True)
     time_d = datetime.datetime.now().replace(microsecond=0)
@@ -166,52 +166,4 @@ def num_selection(osmcon, polyTbl, folder,
     for t in trs: t.join()
     
     return clsRst, timeGasto
-
-
-def arcg_selection(db, polTbl, fld):
-    """
-    Select, Dissolve and Reproject using ArcGIS
-    """
-    
-    import datetime;    import os
-    from gasp.mng.genze import dissolve
-    from gasp.fm.sql    import query_to_df
-    from gasp.anls.exct import sel_by_attr
-    
-    # Get LULC Classes
-    time_a = datetime.datetime.now().replace(microsecond=0)
-    lulcCls = query_to_df(db, (
-        "SELECT selection FROM {} "
-        "WHERE selection IS NOT NULL GROUP BY selection"
-    ).format(polTbl), db_api='sqlite').selection.tolist()
-    time_b = datetime.datetime.now().replace(microsecond=0)
-    
-    timeGasto = {0 : ('check_cls', time_b - time_a)}
-    
-    # Extract Shps from DB
-    clsShp = {}
-    tk = 1
-    SQL = "SELECT selection, geometry FROM {} WHERE selection={}"
-    for cls in lulcCls:
-        time_x = datetime.datetime.now().replace(microsecond=0)
-        shp = sel_by_attr(
-            db, SQL.format(polTbl, str(cls)),
-            os.path.join(fld, 'rule1_{}.shp'.format(cls)),
-            api_gis='ogr'
-        )
-        time_y = datetime.datetime.now().replace(microsecond=0)
-        
-        dShp = dissolve(
-            shp, os.path.join(fld, "rul1_d_{}.shp".format(str(cls))),
-            "FID", geomMultiPart=True
-        )
-        time_z = datetime.datetime.now().replace(microsecond=0)
-        
-        clsShp[int(cls)] = dShp
-        timeGasto[tk]   = ("export_{}".format(cls), time_y - time_x)
-        timeGasto[tk+1] = ("dissolve_{}".format(cls), time_z - time_y)
-        
-        tk += 2
-    
-    return clsShp, timeGasto
 

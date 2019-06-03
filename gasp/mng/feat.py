@@ -22,7 +22,7 @@ def polyline_to_points(inShp, outShp, attr=None, epsg=None):
     
     # Get SRS for the output
     if not epsg:
-        from gasp.prop.feat import get_shp_sref
+        from gasp.prop.prj import get_shp_sref
         srs = get_shp_sref(polyLyr)
     
     else:
@@ -148,7 +148,7 @@ def polylines_from_points(points, polylines, POLYLINE_COLUMN,
         drv_name(polylines)).CreateDataSource(polylines)
     
     if not epsg:
-        from gasp.prop.feat import get_shp_sref
+        from gasp.prop.prj import get_shp_sref
         srs = get_shp_sref(points)
     
     else:
@@ -213,7 +213,7 @@ def feat_to_pnt(inShp, outPnt, epsg=None):
     
     # Get SRS for the output
     if not epsg:
-        from gasp.prop.feat import get_shp_sref
+        from gasp.prop.prj import get_shp_sref
         srs = get_shp_sref(polyLyr)
     
     else:
@@ -277,7 +277,7 @@ def eachfeat_to_newshp(inShp, outFolder, epsg=None):
     
     # Get SRS for the output
     if not epsg:
-        from gasp.prop.feat import get_shp_sref
+        from gasp.prop.prj import get_shp_sref
         srs = get_shp_sref(lyr)
     
     else:

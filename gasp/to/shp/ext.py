@@ -77,7 +77,7 @@ def shpext_to_boundary(inShp, outShp, epsg=None):
     
     # Get SRS for the output
     if not epsg:
-        from gasp.prop.feat import get_shp_sref
+        from gasp.prop.prj import get_shp_sref
         srs = get_shp_sref(inShp)
     
     else:
@@ -118,11 +118,11 @@ def pnts_to_boundary(pntShp, outBound, distMeters):
     Create a boundary from Point using a tolerance in meters
     """
     
-    from osgeo          import ogr
-    from gasp.oss       import get_filename
-    from gasp.prop.ff   import drv_name
-    from gasp.to.geom   import create_point
-    from gasp.prop.feat import get_shp_sref
+    from osgeo         import ogr
+    from gasp.oss      import get_filename
+    from gasp.prop.ff  import drv_name
+    from gasp.to.geom  import create_point
+    from gasp.prop.prj import get_shp_sref
     
     SRS = get_shp_sref(pntShp)
     

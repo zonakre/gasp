@@ -2,8 +2,9 @@
 OpenStreetMap to Land Use/Land Cover Maps
 """
 
+
 def raster_based(osmdata, nomenclature, refRaster, lulcRst,
-           overwrite=None, dataStore=None, roadsAPI='SQLITE'):
+                 overwrite=None, dataStore=None, roadsAPI='SQLITE'):
     """
     Convert OSM Data into Land Use/Land Cover Information
     
@@ -20,6 +21,7 @@ def raster_based(osmdata, nomenclature, refRaster, lulcRst,
     # Gasp dependencies #
     # ************************************************************************ #
     from gasp.oss.ops            import create_folder
+    from gasp.prop.ff            import check_isRaster
     from gasp.prop.rst           import get_epsg_raster
     from gasp.session            import run_grass
     if roadsAPI == 'POSTGIS':
@@ -40,19 +42,13 @@ def raster_based(osmdata, nomenclature, refRaster, lulcRst,
     if not os.path.exists(os.path.dirname(lulcRst)):
         raise ValueError('{} does not exist!'.format(os.path.dirname(lulcRst)))
     
-    # Get EPSG of Reference Raster
-    epsg = get_epsg_raster(refRaster)
-    if not epsg:
-        raise ValueError('Cannot get epsg code of ref raster')
+    time_a = datetime.datetime.now().replace(microsecond=0)
     
     # Get Parameters to connect to PostgreSQL
     conPGSQL = json.load(open(os.path.join(
         os.path.dirname(os.path.abspath(__file__)),
         'con-postgresql.json'
     ), 'r')) if roadsAPI == 'POSTGIS' else None
-    
-    time_a = datetime.datetime.now().replace(microsecond=0)
-    from gasp.osm2lulc.var import PRIORITIES, osmTableData
     
     workspace = os.path.join(os.path.dirname(
         lulcRst), 'osmtolulc') if not dataStore else dataStore
@@ -66,7 +62,37 @@ def raster_based(osmdata, nomenclature, refRaster, lulcRst,
     else:
         create_folder(workspace)
     
+    # Check if refRaster is really a Raster
+    isRst = check_isRaster(refRaster)
+    if not isRst:
+        from gasp.prop.ff import check_isShp
+        
+        if not check_isShp(refRaster):
+            raise ValueError((
+                'refRaster File has an invalid file format. Please give a file '
+                'with one of the following extensions: '
+                'shp, gml, json, kml, tif or img'
+            ))
+        
+        else:
+            # convert shp to raster
+            from gasp.to.rst import shp_to_raster
+            
+            refRaster = shp_to_raster(
+                refRaster, None, 2, -1, os.path.join(
+                    workspace, 'ref_rst.tif'
+                ), api='gdal'
+            )
+    
+    # Get EPSG of Reference Raster
+    epsg = get_epsg_raster(refRaster)
+    if not epsg:
+        raise ValueError('Cannot get epsg code of ref raster')
+    
+    from gasp.osm2lulc.var import PRIORITIES, osmTableData, LEGEND
+    
     __priorites = PRIORITIES[nomenclature]
+    __legend    = LEGEND[nomenclature]
     time_b = datetime.datetime.now().replace(microsecond=0)
     
     # ************************************************************************ #
@@ -92,7 +118,8 @@ def raster_based(osmdata, nomenclature, refRaster, lulcRst,
     # Transform SRS of OSM Data #
     # ************************************************************************ #
     osmTableData = osm_project(
-        conPGSQL if roadsAPI == 'POSTGIS' else osm_db, epsg, api=roadsAPI
+        conPGSQL if roadsAPI == 'POSTGIS' else osm_db, epsg, api=roadsAPI,
+        isGlobeLand=None if nomenclature != 'GLOBE_LAND_30' else True
     )
     time_e = datetime.datetime.now().replace(microsecond=0)
     # ************************************************************************ #
@@ -178,17 +205,22 @@ def raster_based(osmdata, nomenclature, refRaster, lulcRst,
     }
     """
     
-    auOut, timeCheck3 = rst_area(
-        conPGSQL if roadsAPI == 'POSTGIS' else osm_db,
-        osmTableData['polygons'], UPPER=True, api=roadsAPI
-    )
-    for cls in auOut:
-        if cls not in mergeOut:
-            mergeOut[cls] = [auOut[cls]]
-        else:
-            mergeOut[cls].append(auOut[cls])
+    if nomenclature != 'GLOBE_LAND_30':
+        auOut, timeCheck3 = rst_area(
+            conPGSQL if roadsAPI == 'POSTGIS' else osm_db,
+            osmTableData['polygons'], UPPER=True, api=roadsAPI
+        )
+        
+        for cls in auOut:
+            if cls not in mergeOut:
+                mergeOut[cls] = [auOut[cls]]
+            else:
+                mergeOut[cls].append(auOut[cls])
     
-    time_l = datetime.datetime.now().replace(microsecond=0)
+        time_l = datetime.datetime.now().replace(microsecond=0)
+    else:
+        timeCheck3 = None
+        time_l     = None
     # ************************************************************************ #
     # 4 - Area Lower than #
     # ************************************************************************ #
@@ -197,18 +229,21 @@ def raster_based(osmdata, nomenclature, refRaster, lulcRst,
         cls_code : rst_name, ...
     }
     """
+    if nomenclature != 'GLOBE_LAND_30':
+        alOut, timeCheck4 = rst_area(
+            conPGSQL if roadsAPI == 'POSTGIS' else osm_db,
+            osmTableData['polygons'], UPPER=None, api=roadsAPI
+        )
+        for cls in alOut:
+            if cls not in mergeOut:
+                mergeOut[cls] = [alOut[cls]]
+            else:
+                mergeOut[cls].append(alOut[cls])
     
-    alOut, timeCheck4 = rst_area(
-        conPGSQL if roadsAPI == 'POSTGIS' else osm_db,
-        osmTableData['polygons'], UPPER=None, api=roadsAPI
-    )
-    for cls in alOut:
-        if cls not in mergeOut:
-            mergeOut[cls] = [alOut[cls]]
-        else:
-            mergeOut[cls].append(alOut[cls])
-    
-    time_j = datetime.datetime.now().replace(microsecond=0)
+        time_j = datetime.datetime.now().replace(microsecond=0)
+    else:
+        timeCheck4 = None
+        time_j     = None
     # ************************************************************************ #
     # 5 - Get data from lines table (railway | waterway) #
     # ************************************************************************ #
@@ -303,9 +338,9 @@ def raster_based(osmdata, nomenclature, refRaster, lulcRst,
         4  : ('set_grass', time_f - time_e),
         5  : ('rule_1', time_g - time_f, timeCheck1),
         6  : ('rule_2', time_h - time_g, timeCheck2),
-        7  : ('rule_3', time_l - time_h, timeCheck3),
-        8  : ('rule_4', time_j - time_l, timeCheck4),
-        9  : ('rule_5', time_m - time_j, timeCheck5),
+        7  : None if not timeCheck3 else ('rule_3', time_l - time_h, timeCheck3),
+        8  : None if not timeCheck4 else ('rule_4', time_j - time_l, timeCheck4),
+        9  : ('rule_5', time_m - time_j if timeCheck4 else time_m - time_h, timeCheck5),
         10 : None if not timeCheck7 else ('rule_7', time_n - time_m, timeCheck7),
         11 : ('merge_rst', time_o - time_n),
         12 : ('priority_rule', time_p - time_o),
@@ -338,6 +373,7 @@ def vector_based(osmdata, nomenclature, refRaster, lulcShp,
     # GASP dependencies #
     # ************************************************************************ #
     from gasp.oss.ops           import create_folder
+    from gasp.prop.ff           import check_isRaster
     from gasp.prop.rst          import get_epsg_raster
     from gasp.session           import run_grass
     if RoadsAPI == 'POSTGIS':
@@ -361,20 +397,15 @@ def vector_based(osmdata, nomenclature, refRaster, lulcShp,
     if not os.path.exists(os.path.dirname(lulcShp)):
         raise ValueError('{} does not exist!'.format(os.path.dirname(lulcShp)))
     
+    time_a = datetime.datetime.now().replace(microsecond=0)
+    
     # Get Parameters to connect to PostgreSQL
     conPGSQL = json.load(open(os.path.join(
         os.path.dirname(os.path.abspath(__file__)),
         'con-postgresql.json'
     ), 'r')) if RoadsAPI == 'POSTGIS' else None
     
-    # Get EPSG of Reference Raster
-    epsg = get_epsg_raster(refRaster)
-    if not epsg:
-        raise ValueError('Cannot get epsg code of ref raster')
-    
-    time_a = datetime.datetime.now().replace(microsecond=0)
-    from gasp.osm2lulc.var import osmTableData, PRIORITIES
-    
+    # Create workspace for temporary files
     workspace = os.path.join(os.path.dirname(
         lulcShp), 'osmtolulc') if not dataStore else dataStore
     
@@ -387,8 +418,40 @@ def vector_based(osmdata, nomenclature, refRaster, lulcShp,
     else:
         create_folder(workspace)
     
+    # Check if refRaster is really a Raster
+    isRst = check_isRaster(refRaster)
+    if not isRst:
+        from gasp.prop.ff import check_isShp
+        
+        if not check_isShp(refRaster):
+            raise ValueError((
+                'refRaster File has an invalid file format. Please give a file '
+                'with one of the following extensions: '
+                'shp, gml, json, kml, tif or img'
+            ))
+        
+        else:
+            # convert shp to raster
+            from gasp.to.rst import shp_to_raster
+            
+            refRaster = shp_to_raster(
+                refRaster, None, 10, -1, os.path.join(
+                    workspace, 'ref_raster.tif'
+                ), api='gdal'
+            )
+    
+    # Get EPSG of Reference Raster
+    epsg = get_epsg_raster(refRaster)
+    if not epsg:
+        raise ValueError('Cannot get epsg code of ref raster')
+    
+    from gasp.osm2lulc.var import osmTableData, PRIORITIES, LEGEND
+    
     __priorities = PRIORITIES[nomenclature]
+    __legend     = LEGEND[nomenclature]
+    
     time_b = datetime.datetime.now().replace(microsecond=0)
+    
     if RoadsAPI != 'POSTGIS':
         # ******************************************************************** #
         # Convert OSM file to SQLITE DB #
@@ -414,7 +477,8 @@ def vector_based(osmdata, nomenclature, refRaster, lulcShp,
     # ************************************************************************ #
     osmTableData = osm_project(
         osm_db if RoadsAPI != 'POSTGIS' else conPGSQL, epsg,
-        api='SQLITE' if RoadsAPI != 'POSTGIS' else RoadsAPI
+        api='SQLITE' if RoadsAPI != 'POSTGIS' else RoadsAPI,
+        isGlobeLand=None if nomenclature != 'GLOBE_LAND_30' else True
     )
     time_e = datetime.datetime.now().replace(microsecond=0)
     # ************************************************************************ #
@@ -431,7 +495,7 @@ def vector_based(osmdata, nomenclature, refRaster, lulcShp,
     from gasp.anls.ovlay import erase
     from gasp.prop.grs   import rst_to_region
     from gasp.mng.genze  import dissolve
-    from gasp.mng.grstbl import add_and_update, reset_table
+    from gasp.mng.grstbl import add_and_update, reset_table, update_table, add_field
     from gasp.to.shp.grs import shp_to_grs, grs_to_shp
     from gasp.to.rst     import rst_to_grs
     # ************************************************************************ #
@@ -469,23 +533,31 @@ def vector_based(osmdata, nomenclature, refRaster, lulcShp,
     # ************************************************************************ #
     # 3 - Area Upper than #
     # ************************************************************************ #
-    ruleThreeShp, timeCheck3 = grs_vect_selbyarea(
-        osm_db if RoadsAPI != 'POSTGIS' else conPGSQL,
-        osmTableData['polygons'], UPPER=True, apidb=RoadsAPI
-    )
+    if nomenclature != "GLOBE_LAND_30":
+        ruleThreeShp, timeCheck3 = grs_vect_selbyarea(
+            osm_db if RoadsAPI != 'POSTGIS' else conPGSQL,
+            osmTableData['polygons'], UPPER=True, apidb=RoadsAPI
+        )
     
-    osmShps.append(ruleThreeShp)
-    time_l = datetime.datetime.now().replace(microsecond=0)
+        osmShps.append(ruleThreeShp)
+        time_l = datetime.datetime.now().replace(microsecond=0)
+    else:
+        timeCheck3 = None
+        time_l     = None
     # ************************************************************************ #
     # 4 - Area Lower than #
     # ************************************************************************ #
-    ruleFourShp, timeCheck4 = grs_vect_selbyarea(
-        osm_db if RoadsAPI != 'POSTGIS' else conPGSQL,
-        osmTableData['polygons'], UPPER=False, apidb=RoadsAPI
-    )
+    if nomenclature != "GLOBE_LAND_30":
+        ruleFourShp, timeCheck4 = grs_vect_selbyarea(
+            osm_db if RoadsAPI != 'POSTGIS' else conPGSQL,
+            osmTableData['polygons'], UPPER=False, apidb=RoadsAPI
+        )
     
-    osmShps.append(ruleFourShp)
-    time_j = datetime.datetime.now().replace(microsecond=0)
+        osmShps.append(ruleFourShp)
+        time_j = datetime.datetime.now().replace(microsecond=0)
+    else:
+        timeCheck4 = None
+        time_j     = None
     # ************************************************************************ #
     # 5 - Get data from lines table (railway | waterway) #
     # ************************************************************************ #
@@ -579,21 +651,39 @@ def vector_based(osmdata, nomenclature, refRaster, lulcShp,
     
     # Export all classes
     lst_merge = []
-    for cls in osmShps:
-        if cls == __priorities[0]:
+    a = None
+    for i in range(len(__priorities)):
+        if __priorities[i] not in osmShps:
+            continue
+        
+        if not a:
             reset_table(
-                osmShps[cls], {'cls' : 'varchar(5)'}, {'cls' : str(cls)})
+                osmShps[__priorities[i]],
+                {'cls' : 'varchar(5)', 'leg' : 'varchar(75)'},
+                {'cls' : str(__priorities[i]), 'leg' : str(__legend[__priorities[i]])}
+            )
+            
+            a = 1
+        
         else:
             add_and_update(
-                osmShps[cls], {'cls' : 'varchar(5)'}, {'cls' : str(cls)}
+                osmShps[__priorities[i]],
+                {'cls' : 'varchar(5)'},
+                {'cls' : str(__priorities[i])}
             )
         
         ds = dissolve(
-            osmShps[cls], 'dl_{}'.format(str(cls)), 'cls', api="grass")
+            osmShps[__priorities[i]],
+            'dl_{}'.format(str(__priorities[i])), 'cls', api="grass"
+        )
+        
+        add_field(ds, 'leg', 'varchar(75)', ascmd=True)
+        update_table(ds, 'leg', str(__legend[__priorities[i]]), 'leg is null')
         
         lst_merge.append(grs_to_shp(
-            ds, os.path.join(workspace, "lulc_{}.shp".format(str(cls))),
-            'auto', lyrN=1, asCMD=True, asMultiPart=None
+            ds, os.path.join(
+                workspace, "lulc_{}.shp".format(str(__priorities[i]))
+            ), 'auto', lyrN=1, asCMD=True, asMultiPart=None
         ))
     
     time_q = datetime.datetime.now().replace(microsecond=0)
@@ -610,9 +700,10 @@ def vector_based(osmdata, nomenclature, refRaster, lulcShp,
         4  : ('set_grass', time_f - time_e),
         5  : ('rule_1', time_g - time_f, timeCheck1),
         6  : ('rule_2', time_h - time_g, timeCheck2),
-        7  : ('rule_3', time_l - time_h, timeCheck3),
-        8  : ('rule_4', time_j - time_l, timeCheck4),
-        9  : ('rule_5', time_m - time_j, timeCheck5),
+        7  : None if not timeCheck3 else ('rule_3', time_l - time_h, timeCheck3),
+        8  : None if not timeCheck4 else ('rule_4', time_j - time_l, timeCheck4),
+        9  : ('rule_5',
+            time_m - time_j if timeCheck4 else time_m - time_h, timeCheck5),
         10 : None if not timeCheck7 else ('rule_7', time_n - time_m, timeCheck7),
         11 : ('disj_cls', time_o - time_n),
         12 : ('priority_rule', time_p - time_o),

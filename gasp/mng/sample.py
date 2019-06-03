@@ -11,11 +11,11 @@ def create_fishnet(boundary, fishnet, width=None, height=None, rowN=None, colN=N
     """
     
     import os
-    from math           import ceil
-    from gasp.oss       import get_filename
-    from gasp.prop.ff   import drv_name
-    from gasp.prop.ext  import get_extent
-    from gasp.prop.feat import get_shp_sref
+    from math          import ceil
+    from gasp.oss      import get_filename
+    from gasp.prop.ff  import drv_name
+    from gasp.prop.ext import get_extent
+    from gasp.prop.prj import get_shp_sref
     
     # Get boundary extent
     xmin, xmax, ymin, ymax = [float(x) for x in get_extent(boundary, gisApi='ogr')]
@@ -124,11 +124,11 @@ def points_as_grid(boundary, fishnet_pnt, width=None, height=None,
     """
     
     import os
-    from math           import ceil
-    from gasp.oss       import get_filename
-    from gasp.prop.ff   import drv_name
-    from gasp.prop.ext  import get_extent
-    from gasp.prop.feat import get_shp_sref
+    from math          import ceil
+    from gasp.oss      import get_filename
+    from gasp.prop.ff  import drv_name
+    from gasp.prop.ext import get_extent
+    from gasp.prop.prj import get_shp_sref
     
     # Get boundary extent
     xmin, xmax, ymin, ymax = get_extent(boundary, gisApi='ogr')
